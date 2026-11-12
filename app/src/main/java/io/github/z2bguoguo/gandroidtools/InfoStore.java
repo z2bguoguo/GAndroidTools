@@ -76,12 +76,15 @@ public final class InfoStore extends SQLiteOpenHelper {
 
   public List<Entry> list(long parent, String query, int offset) {
     List<Entry> out = new ArrayList<>();
-    String where = query.isBlank() ? "parent IS ?" : "parent IS ? AND title LIKE ? ESCAPE '\\'";
-    String term = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
-    String[] args =
-        query.isBlank()
-            ? new String[] {parent == 0 ? null : "" + parent}
-            : new String[] {parent == 0 ? null : "" + parent, term};
+    String where = parent == 0 ? "parent IS NULL" : "parent=?";
+    List<String> parameters = new ArrayList<>();
+    if (parent != 0) parameters.add(Long.toString(parent));
+    if (!query.isBlank()) {
+      where += " AND title LIKE ? ESCAPE '\\'";
+      parameters.add(
+          "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+    }
+    String[] args = parameters.toArray(new String[0]);
     try (Cursor c =
         getReadableDatabase()
             .rawQuery(

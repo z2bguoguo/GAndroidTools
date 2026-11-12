@@ -61,7 +61,8 @@ public final class RemoteService extends IRemoteTools.Stub {
     try {
       Class<?> activityThread = Class.forName("android.app.ActivityThread");
       Object main = activityThread.getMethod("systemMain").invoke(null);
-      context = (Context) activityThread.getMethod("getSystemContext").invoke(main);
+      Context system = (Context) activityThread.getMethod("getSystemContext").invoke(main);
+      context = system.createPackageContext("com.android.shell", Context.CONTEXT_IGNORE_SECURITY);
       Class<?> connection = Class.forName("android.app.IUiAutomationConnection");
       Object impl =
           Class.forName("android.app.UiAutomationConnection")
@@ -388,12 +389,18 @@ public final class RemoteService extends IRemoteTools.Stub {
         .invoke(null);
   }
 
+  private Class<?> taskInterface() throws Exception {
+    return Class.forName(
+        android.os.Build.VERSION.SDK_INT >= 29
+            ? "android.app.IActivityTaskManager"
+            : "android.app.IActivityManager");
+  }
+
   private JSONArray tasks() throws Exception {
     Object service = taskService();
     List<?> list =
         (List<?>)
-            service
-                .getClass()
+            taskInterface()
                 .getMethod(
                     android.os.Build.VERSION.SDK_INT >= 30
                         ? "getAllRootTaskInfos"
@@ -480,7 +487,7 @@ public final class RemoteService extends IRemoteTools.Stub {
               }
               if (cropped != padded && cropped != thumb) cropped.recycle();
               if (padded != thumb) padded.recycle();
-            } catch (IllegalStateException ignored) {
+            } catch (RuntimeException ignored) {
               /* Display closed. */
             }
           }
@@ -511,8 +518,7 @@ public final class RemoteService extends IRemoteTools.Stub {
 
   private void move(int task, int display) throws Exception {
     Object service = taskService();
-    service
-        .getClass()
+    taskInterface()
         .getMethod(
             android.os.Build.VERSION.SDK_INT >= 30 ? "moveRootTaskToDisplay" : "moveStackToDisplay",
             int.class,
@@ -524,8 +530,11 @@ public final class RemoteService extends IRemoteTools.Stub {
     Parked item = parked.get(task);
     if (item == null) throw new IllegalStateException("Parked task no longer exists");
     move(task, 0);
-    shell(List.of("am", "task", "focus", Integer.toString(task)), 5);
-    release(item);
+    try {
+      shell(List.of("am", "task", "focus", Integer.toString(task)), 5);
+    } finally {
+      release(item);
+    }
   }
 
   private void release(Parked p) {

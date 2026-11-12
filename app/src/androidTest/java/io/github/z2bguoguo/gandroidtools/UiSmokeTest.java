@@ -26,9 +26,14 @@ public class UiSmokeTest {
             assertNotNull(change);
             change.performClick();
             assertNotNull(find(a.getWindow().getDecorView(), "⚙\n设置"));
+            TextView notebook = find(a.getWindow().getDecorView(), "▤\n信息本");
+            assertNotNull(notebook);
+            notebook.performClick();
+            assertNotNull(find(a.getWindow().getDecorView(), "信息本"));
           });
     }
     long folder = app.info.add(0, "test-folder-" + System.nanoTime(), "folder", "");
+    assertFalse(app.info.list(0, "test-folder-", 0).isEmpty());
     long child = app.info.add(folder, "nested", "folder", "");
     long item = app.info.add(child, "a%_", "text", "value");
     assertEquals("value", app.info.get(item).value());
