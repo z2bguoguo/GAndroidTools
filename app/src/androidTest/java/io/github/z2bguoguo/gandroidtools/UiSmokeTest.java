@@ -1,0 +1,49 @@
+package io.github.z2bguoguo.gandroidtools;
+
+import static org.junit.Assert.*;
+
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import androidx.test.core.app.ActivityScenario;
+import androidx.test.platform.app.InstrumentationRegistry;
+import org.junit.Test;
+
+public class UiSmokeTest {
+  @Test
+  public void bilingualNavigationAndNotebookStorage() {
+    ToolApp app =
+        (ToolApp)
+            InstrumentationRegistry.getInstrumentation().getTargetContext().getApplicationContext();
+    app.config.set("language", "en");
+    try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+      scenario.onActivity(
+          a -> {
+            TextView settings = find(a.getWindow().getDecorView(), "⚙\nSettings");
+            assertNotNull(settings);
+            settings.performClick();
+            TextView change = find(a.getWindow().getDecorView(), "切换到中文");
+            assertNotNull(change);
+            change.performClick();
+            assertNotNull(find(a.getWindow().getDecorView(), "⚙\n设置"));
+          });
+    }
+    long folder = app.info.add(0, "test-folder-" + System.nanoTime(), "folder", "");
+    long child = app.info.add(folder, "nested", "folder", "");
+    long item = app.info.add(child, "a%_", "text", "value");
+    assertEquals("value", app.info.get(item).value());
+    assertEquals(1, app.info.list(child, "%_", 0).size());
+    app.info.delete(folder);
+    assertThrows(IllegalArgumentException.class, () -> app.info.get(item));
+  }
+
+  private TextView find(View v, String text) {
+    if (v instanceof TextView t && t.getText().toString().equals(text)) return t;
+    if (v instanceof ViewGroup group)
+      for (int i = 0; i < group.getChildCount(); i++) {
+        TextView found = find(group.getChildAt(i), text);
+        if (found != null) return found;
+      }
+    return null;
+  }
+}

@@ -1,0 +1,1 @@
+<resources><string name="app_name">GAndroidTools</string><string name="accessibility_name">GAndroidTools · 输入与宏录制</string><string name="accessibility_description">可选的本地输入桥接与主动开启的宏录制。读取控件信息以填写选定输入框及记录操作，排除密码输入框，不上传数据。</string></resources>
