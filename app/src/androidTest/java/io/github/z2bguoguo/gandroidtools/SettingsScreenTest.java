@@ -13,6 +13,8 @@ import java.io.FileOutputStream;
 import org.junit.Test;
 
 public class SettingsScreenTest {
+  private MainActivity current;
+
   @Test
   public void categorizedSettingsExposeMirroredSemicircles() throws Exception {
     ToolApp.app.config.set("language", "zh");
@@ -25,6 +27,7 @@ public class SettingsScreenTest {
     try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
       scenario.onActivity(
           a -> {
+            current = a;
             TextView settings = find(a.getWindow().getDecorView(), "⚙\n设置");
             assertNotNull(settings);
             settings.performClick();
@@ -51,6 +54,18 @@ public class SettingsScreenTest {
   }
 
   private void capture(String name) throws Exception {
+    awaitFrames();
+    if (name.startsWith("semicircle")) {
+      InstrumentationRegistry.getInstrumentation()
+          .runOnMainSync(
+              () -> {
+                View graph = findGraph(current.getWindow().getDecorView());
+                assertNotNull(graph);
+                graph.requestRectangleOnScreen(
+                    new android.graphics.Rect(0, 0, graph.getWidth(), graph.getHeight()), true);
+              });
+      awaitFrames();
+    }
     Bitmap bitmap = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
     assertNotNull(bitmap);
     File dir =
@@ -70,6 +85,29 @@ public class SettingsScreenTest {
             + new File(dir, name).getAbsolutePath()
             + " /sdcard/Download/gandroidtools-ui-previews/"
             + name);
+  }
+
+  private View findGraph(View view) {
+    if (view instanceof SemiCircleLayout) return view;
+    if (view instanceof ViewGroup group)
+      for (int i = 0; i < group.getChildCount(); i++) {
+        View found = findGraph(group.getChildAt(i));
+        if (found != null) return found;
+      }
+    return null;
+  }
+
+  private void awaitFrames() throws Exception {
+    java.util.concurrent.CountDownLatch rendered = new java.util.concurrent.CountDownLatch(1);
+    InstrumentationRegistry.getInstrumentation()
+        .runOnMainSync(
+            () ->
+                android.view.Choreographer.getInstance()
+                    .postFrameCallback(
+                        first ->
+                            android.view.Choreographer.getInstance()
+                                .postFrameCallback(second -> rendered.countDown())));
+    assertTrue("UI did not render", rendered.await(5, java.util.concurrent.TimeUnit.SECONDS));
   }
 
   private void runShell(String command) throws Exception {
