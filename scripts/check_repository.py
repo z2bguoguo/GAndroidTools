@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 GAndroidTools contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Offline repository invariants; content secret scanning runs separately in CI."""
 from pathlib import Path
 import re

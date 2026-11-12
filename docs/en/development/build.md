@@ -28,3 +28,7 @@ All pushes and pull requests run formatting, unit tests, Android Lint, debug APK
 ## Wiki
 
 VitePress builds from `docs`, with the base path `/GAndroidTools/` and Chinese/English locales. Enable GitHub Pages with the **GitHub Actions** source, then set repository Actions variable `PAGES_ENABLED=true`. The workflow uploads a Pages artifact on every documentation check and deploys it when enabled. Private repositories may require a qualifying GitHub plan; no visibility change is performed by the workflow.
+
+Before packaging, the workflow matches private-key certificates against `signing-certificate.sha256`. If `ANDROID_KEY_ALIAS` is wrong but exactly one private key matches the pinned certificate, it uses that verified alias and emits a warning. Missing or ambiguous matches fail. The key password must still be correct; no signing identity is generated or replaced.
+
+Original project code is licensed under **GPL-3.0-or-later** (GNU GPL version 3 or later). See `LICENSE` for the full terms and `NOTICE` for the project grant. The app home page includes an offline license viewer; release assets include the notices. Third-party components retain their licenses, as listed in `THIRD_PARTY_NOTICES.md`.

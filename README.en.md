@@ -6,7 +6,7 @@
   <a href="https://github.com/z2bguoguo/GAndroidTools/actions/workflows/quality.yml"><img alt="Quality" src="https://github.com/z2bguoguo/GAndroidTools/actions/workflows/quality.yml/badge.svg" /></a>
   <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-407F75?style=flat-square" />
   <img alt="Preview" src="https://img.shields.io/badge/channel-preview-A6C9E8?style=flat-square" />
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-407F75?style=flat-square" /></a>
+  <a href="LICENSE"><img alt="GPL-3.0-or-later license" src="https://img.shields.io/badge/license-GPL--3.0--or--later-407F75?style=flat-square" /></a>
 </p>
 
 <p align="center"><b>A fresh, configurable Android toolbox powered by Shizuku.</b><br />Keep capture, search, automation and text snippets within reach at the edge of your screen.</p>
@@ -45,4 +45,4 @@ This is preview software. Task migration and control automation depend on Androi
 
 [User guide](docs/en/guide/start.md) · [Script API](docs/en/guide/macros.md) · [Page format](docs/en/guide/page-format.md) · [Build and release](docs/en/development/build.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-Licensed under the [MIT License](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md).
+Licensed under the [GNU GPL v3 or later](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 GAndroidTools contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 package io.github.z2bguoguo.gandroidtools;
 
 import static org.junit.Assert.*;

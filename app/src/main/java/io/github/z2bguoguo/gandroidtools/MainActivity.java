@@ -1,3 +1,5 @@
+// Copyright (c) 2026 GAndroidTools contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 package io.github.z2bguoguo.gandroidtools;
 
 import android.Manifest;
@@ -222,7 +224,39 @@ public final class MainActivity extends FragmentActivity {
         ToolApp.t("使用文档", "Documentation"),
         ToolApp.t("功能指南与兼容性说明", "Guides and compatibility"),
         () -> link("https://z2bguoguo.github.io/GAndroidTools/"));
+    Ui.entry(
+        entries,
+        ToolApp.t("开源许可", "Open-source license"),
+        "GPL-3.0-or-later · © 2026 GAndroidTools contributors",
+        this::showLicense);
     root.addView(Ui.body(this, BuildConfig.VERSION_NAME + " · Android 8.0+ · Shizuku"));
+  }
+
+  private void showLicense() {
+    LinearLayout body = Ui.column(this);
+    try {
+      for (String file : new String[] {"NOTICE", "LICENSE", "THIRD_PARTY_NOTICES.md"}) {
+        try (java.io.BufferedReader reader =
+            new java.io.BufferedReader(
+                new java.io.InputStreamReader(
+                    getAssets().open(file), java.nio.charset.StandardCharsets.UTF_8))) {
+          StringBuilder text = new StringBuilder();
+          String line;
+          while ((line = reader.readLine()) != null) text.append(line).append('\n');
+          TextView view = Ui.body(this, text.toString());
+          view.setTextIsSelectable(true);
+          body.addView(view);
+        }
+      }
+    } catch (java.io.IOException error) {
+      app.log.error("license", error);
+      body.addView(Ui.body(this, ToolApp.t("无法读取许可文件", "Cannot read license files")));
+    }
+    new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+        .setTitle(ToolApp.t("开源许可", "Open-source license"))
+        .setView(Ui.scroll(this, body))
+        .setPositiveButton(ToolApp.t("关闭", "Close"), null)
+        .show();
   }
 
   private void tools() {

@@ -159,6 +159,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Resolve private-key alias using pinned certificate
+        run: python3 scripts/prepare_signing_alias.py signing-certificate.sha256
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -171,6 +173,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir release
+          cp LICENSE NOTICE THIRD_PARTY_NOTICES.md release/
           cp app/build/outputs/apk/release/app-release.apk "release/GAndroidTools-$VERSION_NAME.apk"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "release/GAndroidTools-$VERSION_NAME.apk" > release/signature.txt
           python3 scripts/verify_certificate.py release/signature.txt signing-certificate.sha256

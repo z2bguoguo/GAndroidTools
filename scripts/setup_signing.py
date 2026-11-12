@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 GAndroidTools contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Create or reuse a persistent signing identity and upload repository Actions secrets."""
 import argparse
 import base64

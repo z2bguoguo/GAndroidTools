@@ -6,7 +6,7 @@
   <a href="https://github.com/z2bguoguo/GAndroidTools/actions/workflows/quality.yml"><img alt="Quality" src="https://github.com/z2bguoguo/GAndroidTools/actions/workflows/quality.yml/badge.svg" /></a>
   <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-407F75?style=flat-square" />
   <img alt="Preview" src="https://img.shields.io/badge/channel-preview-A6C9E8?style=flat-square" />
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-407F75?style=flat-square" /></a>
+  <a href="LICENSE"><img alt="GPL-3.0-or-later license" src="https://img.shields.io/badge/license-GPL--3.0--or--later-407F75?style=flat-square" /></a>
 </p>
 
 <p align="center"><b>一个清爽、可配置、基于 Shizuku 的安卓工具箱。</b><br />把常用操作放到屏幕边缘，让截图、查找、自动化和信息填写随手可达。</p>
@@ -45,4 +45,4 @@
 
 [使用指南](docs/guide/start.md) · [脚本 API](docs/guide/macros.md) · [页面文件格式](docs/guide/page-format.md) · [开发与发布](docs/development/build.md) · [贡献指南](CONTRIBUTING.md) · [安全说明](SECURITY.md)
 
-采用 [MIT License](LICENSE)。第三方组件许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+采用 [GNU GPL v3 或更新版本](LICENSE)。第三方组件许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

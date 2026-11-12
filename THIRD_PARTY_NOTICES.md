@@ -1,5 +1,7 @@
 # Third-party notices
 
+GAndroidTools original code is licensed under GPL-3.0-or-later (see LICENSE and NOTICE). The components below retain their upstream licenses.
+
 | Component | License | Upstream |
 | --- | --- | --- |
 | Shizuku API and provider | Apache-2.0 | https://github.com/RikkaApps/Shizuku-API |

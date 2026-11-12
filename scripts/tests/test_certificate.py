@@ -1,3 +1,5 @@
+# Copyright (c) 2026 GAndroidTools contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
 import importlib.util
 from pathlib import Path
 import unittest

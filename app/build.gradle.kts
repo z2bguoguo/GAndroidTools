@@ -1,3 +1,5 @@
+// Copyright (c) 2026 GAndroidTools contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 plugins { id("com.android.application") }
 android {
     namespace = "io.github.z2bguoguo.gandroidtools"
@@ -58,3 +60,12 @@ listOf("spotlessApply", "spotlessCheck").forEach { taskName ->
         }
     }
 }
+
+// Package the repository license verbatim for offline viewing.
+val licenseAssets = layout.buildDirectory.dir("generated/licenseAssets")
+val prepareLicenseAssets by tasks.registering(Copy::class) {
+    from(rootProject.projectDir) { include("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md") }
+    into(licenseAssets)
+}
+android.sourceSets.getByName("main").assets.srcDir(licenseAssets)
+tasks.named("preBuild") { dependsOn(prepareLicenseAssets) }
