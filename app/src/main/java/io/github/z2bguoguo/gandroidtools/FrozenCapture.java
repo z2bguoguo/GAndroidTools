@@ -54,7 +54,22 @@ public final class FrozenCapture {
             JSONObject tree =
                 new JSONObject()
                     .put("nodes", frozen.getJSONArray("nodes"))
-                    .put("capturedAt", frozen.optString("capturedAt"));
+                    .put("capturedAt", frozen.optString("capturedAt"))
+                    .put("treeAvailable", frozen.optBoolean("treeAvailable", true))
+                    .put("treeError", frozen.optString("treeError"))
+                    .put("captureBackend", frozen.optString("captureBackend"));
+            ToolApp.app.log.add("INFO", "screenshot.backend", frozen.optString("captureBackend"));
+            if (!frozen.optString("captureWarning").isEmpty())
+              ToolApp.app.log.add(
+                  "WARN", "screenshot.fallback", frozen.getString("captureWarning"));
+            if (!tree.optBoolean("treeAvailable")) {
+              ToolApp.app.log.add("WARN", "screenshot.controls", tree.getString("treeError"));
+              Ui.toast(
+                  context,
+                  ToolApp.t(
+                      "截图已保留；控件树暂不可用，详情见日志",
+                      "Screenshot retained; controls unavailable. See logs."));
+            }
             Bitmap result = shot;
             shot = null;
             ToolApp.app.main.post(
@@ -96,6 +111,15 @@ public final class FrozenCapture {
             17,
             Ui.INK);
     root.addView(title);
+    if (!metadata.optBoolean("treeAvailable", true)) {
+      root.addView(
+          Ui.body(
+              context,
+              ToolApp.t(
+                  "控件树连接失败：本次仅保留截图，无法按控件调整。可在首页重新连接后重试。",
+                  "Controls unavailable: this capture contains pixels only. Reconnect on Home and"
+                      + " retry.")));
+    }
     Preview preview = new Preview();
     root.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
     root.addView(

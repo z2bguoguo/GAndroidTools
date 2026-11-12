@@ -119,7 +119,16 @@ public final class CaptureSession {
   }
 
   private void scroll(String mode) throws Exception {
-    List<TreeNode> nodes = TreeNode.parse(app.bridge.call("tree"));
+    List<TreeNode> nodes = List.of();
+    if (mode.equals("page"))
+      try {
+        nodes = TreeNode.parse(app.bridge.call("tree"));
+      } catch (Exception error) {
+        app.log.add(
+            "WARN",
+            "capture.scroll",
+            "Control scroll unavailable; using a screen gesture: " + ErrorDetails.message(error));
+      }
     if (mode.equals("page"))
       for (TreeNode n : nodes)
         if (n.scrollable
@@ -150,9 +159,26 @@ public final class CaptureSession {
     Bitmap raw = null, bitmap = null;
     try {
       pause(150);
-      JSONObject tree = app.bridge.call("tree");
+      JSONObject tree = app.bridge.call("freeze");
+      raw = app.bridge.screenshot(-tree.getInt("captureId"));
+      if (!tree.optBoolean("treeAvailable", true)) {
+        synchronized (this) {
+          if (!include.isEmpty() || !exclude.isEmpty())
+            throw new IllegalStateException(
+                "Control-based capture rules require a valid control tree; capture stopped without"
+                    + " exporting an unmasked frame");
+        }
+        if (firstTree == null) {
+          app.log.add("WARN", "capture.controls", tree.optString("treeError"));
+          Ui.toast(
+              app,
+              ToolApp.t(
+                  "控件树暂不可用：使用整屏截图与手势滚动",
+                  "Controls unavailable: using full-screen capture and gesture scrolling"));
+        }
+      }
       if (firstTree == null) firstTree = tree;
-      raw = app.bridge.screenshot(0);
+      app.log.add("DEBUG", "capture.backend", tree.optString("captureBackend"));
       List<TreeNode> nodes = TreeNode.parse(tree);
       Rect region = new Rect(0, 0, raw.getWidth(), raw.getHeight());
       synchronized (this) {

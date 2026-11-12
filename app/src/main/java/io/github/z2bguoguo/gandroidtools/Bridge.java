@@ -38,7 +38,10 @@ public final class Bridge {
                       "capabilities",
                       status.optBoolean("automation")
                           ? "UI automation available"
-                          : status.optString("automationError"));
+                          : status.optString(
+                              "automationTrace", status.optString("automationError")));
+                  if (!status.optString("contextError").isEmpty())
+                    app.log.add("WARN", "shizuku.context", status.getString("contextError"));
                 } catch (Exception e) {
                   app.log.error("shizuku", e);
                 }
@@ -118,8 +121,13 @@ public final class Bridge {
     long start = android.os.SystemClock.elapsedRealtime();
     data.put("action", action);
     JSONObject response = new JSONObject(service.call(data.toString()));
-    if (!response.optBoolean("ok"))
+    if (!response.optBoolean("ok")) {
+      app.log.add(
+          "ERROR",
+          "remote." + action,
+          response.optString("errorTrace", response.optString("error")));
       throw new IllegalStateException(response.optString("error", "Remote operation failed"));
+    }
     app.log.add(
         "DEBUG",
         "bridge",

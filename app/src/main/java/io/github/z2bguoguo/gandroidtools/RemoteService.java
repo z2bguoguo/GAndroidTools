@@ -32,7 +32,11 @@ import org.json.JSONObject;
 public final class RemoteService extends IRemoteTools.Stub {
   private final HandlerThread thread = new HandlerThread("gat-automation");
   private UiAutomation automation;
-  private String automationError = "";
+  private String automationError = "Not connected";
+  private String automationTrace = "";
+  private String contextError = "";
+  private long automationRetryAt;
+  private String captureBackend = "", captureError = "";
   private final Map<String, AccessibilityNodeInfo> nodes = new LinkedHashMap<>();
   private final Map<Integer, Parked> parked = new LinkedHashMap<>();
 
@@ -59,26 +63,116 @@ public final class RemoteService extends IRemoteTools.Stub {
   private int frozenId;
 
   public RemoteService() {
+    this(null);
+  }
+
+  /** Shizuku already owns ActivityThread; never call systemMain a second time. */
+  public RemoteService(Context supplied) {
     thread.start();
+    CallIdentity.run(
+        shellIdentity,
+        () -> {
+          try {
+            Context base = supplied;
+            if (base == null) {
+              Class<?> activityThread = Class.forName("android.app.ActivityThread");
+              Object current = activityThread.getMethod("currentActivityThread").invoke(null);
+              if (current == null)
+                throw new IllegalStateException("Shizuku runtime has no ActivityThread");
+              base = (Context) activityThread.getMethod("getSystemContext").invoke(current);
+            }
+            context =
+                base.createPackageContext("com.android.shell", Context.CONTEXT_IGNORE_SECURITY);
+          } catch (Throwable error) {
+            contextError = ErrorDetails.trace(error);
+          }
+          return null;
+        });
+  }
+
+  private void ensureAutomation() {
+    if (automation != null || android.os.SystemClock.elapsedRealtime() < automationRetryAt) return;
+    automationRetryAt = android.os.SystemClock.elapsedRealtime() + 30_000;
+    UiAutomation candidate = null;
+    Object impl = null;
+    String stage = "connection constructor";
     try {
-      Class<?> activityThread = Class.forName("android.app.ActivityThread");
-      Object main = activityThread.getMethod("systemMain").invoke(null);
-      Context system = (Context) activityThread.getMethod("getSystemContext").invoke(main);
-      context = system.createPackageContext("com.android.shell", Context.CONTEXT_IGNORE_SECURITY);
       Class<?> connection = Class.forName("android.app.IUiAutomationConnection");
-      Object impl =
+      impl =
           Class.forName("android.app.UiAutomationConnection")
               .getDeclaredConstructor()
               .newInstance();
-      automation =
+      stage = "UiAutomation constructor";
+      candidate =
           UiAutomation.class
               .getConstructor(android.os.Looper.class, connection)
               .newInstance(thread.getLooper(), impl);
-      // Preserve the user's enabled accessibility services.
-      UiAutomation.class.getMethod("connect", int.class).invoke(automation, 1);
+      stage = "connect (preserve accessibility services)";
+      // Run lazily inside the identity-cleared request, with a separate callback looper.
+      if (android.os.Build.VERSION.SDK_INT >= 31) {
+        UiAutomation.class
+            .getMethod("connectWithTimeout", int.class, long.class)
+            .invoke(candidate, 1, 4000L);
+      } else {
+        UiAutomation.class.getMethod("connect", int.class).invoke(candidate, 1);
+      }
+      automation = candidate;
+      automationError = automationTrace = "";
     } catch (Throwable error) {
-      automation = null;
-      automationError = error.toString();
+      automationError = stage + ": " + ErrorDetails.message(error);
+      automationTrace = stage + "\n" + ErrorDetails.trace(error);
+      closeFailedAutomation(candidate, impl);
+    }
+  }
+
+  // This method runs only in the shell app_process, never in the application VM.
+  @android.annotation.SuppressLint("SoonBlockedPrivateApi")
+  private static void closeFailedAutomation(UiAutomation candidate, Object connection) {
+    if (connection != null)
+      try {
+        connection.getClass().getMethod("shutdown").invoke(connection);
+      } catch (Throwable ignored) {
+        /* May not have registered a client. */
+      }
+    if (candidate != null)
+      try {
+        // A framework exception during connect can leave UiAutomation in CONNECTING,
+        // where disconnect() refuses to stop its callback thread.
+        java.lang.reflect.Field callback =
+            UiAutomation.class.getDeclaredField("mRemoteCallbackThread");
+        callback.setAccessible(true);
+        Object value = callback.get(candidate);
+        if (value instanceof HandlerThread worker) worker.quitSafely();
+      } catch (Throwable ignored) {
+        /* Older frameworks can use the supplied looper. */
+      }
+  }
+
+  private Bitmap captureScreen() throws Exception {
+    ensureAutomation();
+    captureError = "";
+    if (automation != null) {
+      try {
+        Bitmap bitmap = automation.takeScreenshot();
+        if (bitmap == null)
+          throw new IllegalStateException("UiAutomation returned an empty screenshot");
+        captureBackend = "UiAutomation";
+        return bitmap;
+      } catch (Exception error) {
+        captureError = ErrorDetails.trace(error);
+      }
+    } else captureError = automationTrace;
+    try {
+      Bitmap bitmap = ShellCapture.capture();
+      captureBackend = "shell screencap";
+      return bitmap;
+    } catch (Exception error) {
+      throw new IllegalStateException(
+          "Both screenshot backends failed: "
+              + ErrorDetails.message(error)
+              + "\nUiAutomation: "
+              + (captureError.isEmpty() ? automationError : captureError),
+          error);
     }
   }
 
@@ -104,21 +198,37 @@ public final class RemoteService extends IRemoteTools.Stub {
       JSONObject p = new JSONObject(request);
       switch (p.getString("action")) {
         case "status" -> {
+          ensureAutomation();
           result.put("uid", android.os.Process.myUid());
           result.put("executionUid", android.os.Binder.getCallingUid());
           result.put("automation", automation != null);
           result.put("automationError", automationError);
+          result.put("automationTrace", automationTrace);
+          result.put("contextError", contextError);
+          result.put("captureBackend", captureBackend);
           result.put("virtualDisplay", context != null);
         }
         case "freeze" -> {
-          requireAutomation();
           if (frozenBitmap != null) frozenBitmap.recycle();
-          frozenBitmap = automation.takeScreenshot();
+          frozenBitmap = null;
+          frozenBitmap = captureScreen();
           if (frozenBitmap == null) throw new IllegalStateException("Screenshot unavailable");
           frozenId = frozenId == Integer.MAX_VALUE ? 1 : frozenId + 1;
           result.put("captureId", frozenId);
           result.put("capturedAt", java.time.Instant.now().toString());
-          result.put("nodes", dump(false));
+          result.put("captureBackend", captureBackend);
+          result.put("captureWarning", captureError);
+          try {
+            requireAutomation();
+            result.put("nodes", dump(false));
+            result.put("treeAvailable", true);
+          } catch (Exception error) {
+            for (AccessibilityNodeInfo old : nodes.values()) old.recycle();
+            nodes.clear();
+            result.put("nodes", new JSONArray());
+            result.put("treeAvailable", false);
+            result.put("treeError", ErrorDetails.trace(error));
+          }
         }
         case "tree" -> {
           requireAutomation();
@@ -272,9 +382,10 @@ public final class RemoteService extends IRemoteTools.Stub {
       result.put("ok", true);
     } catch (Throwable error) {
       try {
-        Throwable cause = error;
-        while (cause.getCause() != null) cause = cause.getCause();
-        result.put("ok", false).put("error", cause.toString());
+        result
+            .put("ok", false)
+            .put("error", ErrorDetails.message(error))
+            .put("errorTrace", ErrorDetails.trace(error));
       } catch (Exception ignored) {
         /* JSON literals cannot fail. */
       }
@@ -283,6 +394,7 @@ public final class RemoteService extends IRemoteTools.Stub {
   }
 
   private void requireAutomation() {
+    ensureAutomation();
     if (automation == null)
       throw new IllegalStateException("UI automation unavailable: " + automationError);
   }
@@ -613,8 +725,7 @@ public final class RemoteService extends IRemoteTools.Stub {
         bitmap = frozenBitmap;
         frozenBitmap = null;
       } else if (display == 0) {
-        requireAutomation();
-        bitmap = automation.takeScreenshot();
+        bitmap = captureScreen();
       } else {
         Parked match = null;
         for (Parked p : parked.values())
