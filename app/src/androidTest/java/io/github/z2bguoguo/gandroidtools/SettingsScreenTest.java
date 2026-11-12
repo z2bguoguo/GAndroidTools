@@ -64,6 +64,24 @@ public class SettingsScreenTest {
       bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
     }
     bitmap.recycle();
+    runShell("mkdir -p /sdcard/Download/gandroidtools-ui-previews");
+    runShell(
+        "cp "
+            + new File(dir, name).getAbsolutePath()
+            + " /sdcard/Download/gandroidtools-ui-previews/"
+            + name);
+  }
+
+  private void runShell(String command) throws Exception {
+    try (android.os.ParcelFileDescriptor fd =
+            InstrumentationRegistry.getInstrumentation()
+                .getUiAutomation()
+                .executeShellCommand(command);
+        android.os.ParcelFileDescriptor.AutoCloseInputStream in =
+            new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)) {
+      byte[] bytes = new byte[1024];
+      while (in.read(bytes) != -1) {}
+    }
   }
 
   private void clickRow(View view) {

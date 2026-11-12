@@ -10,6 +10,7 @@ android {
         versionName = System.getenv("VERSION_NAME") ?: "0.2.0-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    if (System.getenv("CI") == "true") { installation { installOptions.add("-g") } }
     buildFeatures { aidl = true; buildConfig = true }
     signingConfigs {
         create("release") {

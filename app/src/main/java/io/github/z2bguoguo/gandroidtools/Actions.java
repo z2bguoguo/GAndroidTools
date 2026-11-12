@@ -66,10 +66,42 @@ public final class Actions {
     return ToolApp.t(zh[i], en[i]);
   }
 
+  public static String shortLabel(String id) {
+    return switch (id) {
+      case "screenshot" -> ToolApp.t("截图", "Shot");
+      case "cancelScreenshot" -> ToolApp.t("取消延迟", "Cancel");
+      case "capture" -> ToolApp.t("长截图", "Capture");
+      case "frame" -> ToolApp.t("采集", "Frame");
+      case "auto" -> ToolApp.t("自动", "Auto");
+      case "finish" -> ToolApp.t("导出", "Export");
+      case "cancelCapture" -> ToolApp.t("取消截图", "Cancel");
+      case "tree" -> ToolApp.t("控件", "Controls");
+      case "captureSettings" -> ToolApp.t("截图设置", "Options");
+      case "mode" -> ToolApp.t("模式", "Mode");
+      case "snapshot" -> ToolApp.t("页面包", "Archive");
+      case "find" -> ToolApp.t("查找", "Find");
+      case "park" -> ToolApp.t("隐藏前台", "Park app");
+      case "tasks" -> ToolApp.t("隐藏任务", "Tasks");
+      case "info" -> ToolApp.t("信息本", "Notes");
+      case "infoAdd" -> ToolApp.t("添加信息", "Add note");
+      case "record" -> ToolApp.t("录制", "Record");
+      case "macro" -> ToolApp.t("运行宏", "Run");
+      case "stopMacro" -> ToolApp.t("停止宏", "Stop");
+      case "services" -> ToolApp.t("无障碍", "Access");
+      case "back" -> ToolApp.t("返回", "Back");
+      case "dock" -> ToolApp.t("贴边", "Dock");
+      case "home" -> ToolApp.t("首页", "Home");
+      case "logs" -> ToolApp.t("日志", "Logs");
+      case "stop" -> ToolApp.t("关闭", "Close");
+      default -> ToolApp.t("未分配", "Empty");
+    };
+  }
+
   public static android.widget.TextView ball(
       android.content.Context c, String id, String position) {
     String label = id.equals("none") ? ToolApp.t("未分配", "Empty") : label(id);
-    android.widget.TextView v = Ui.text(c, label, 10, id.equals("none") ? Ui.MUTED : Ui.INK);
+    android.widget.TextView v =
+        Ui.text(c, shortLabel(id), 11, id.equals("none") ? Ui.MUTED : Ui.INK);
     v.setGravity(android.view.Gravity.CENTER);
     v.setPadding(Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 4));
     v.setMaxLines(3);

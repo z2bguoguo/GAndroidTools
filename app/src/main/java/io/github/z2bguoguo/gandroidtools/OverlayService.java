@@ -173,6 +173,7 @@ public final class OverlayService extends Service {
             switch (e.getActionMasked()) {
               case MotionEvent.ACTION_DOWN -> {
                 handler.removeCallbacks(dockTimer);
+                bubble.animate().cancel();
                 bubble.setTranslationX(0);
                 x = e.getRawX();
                 y = e.getRawY();
