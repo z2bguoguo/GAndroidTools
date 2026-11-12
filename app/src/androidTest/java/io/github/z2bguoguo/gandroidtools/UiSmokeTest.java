@@ -22,6 +22,11 @@ public class UiSmokeTest {
             TextView settings = find(a.getWindow().getDecorView(), "⚙\nSettings");
             assertNotNull(settings);
             settings.performClick();
+            TextView appearance = find(a.getWindow().getDecorView(), "Language and appearance");
+            assertNotNull(appearance);
+            View click = appearance;
+            while (!click.isClickable() && click.getParent() instanceof View parent) click = parent;
+            assertTrue(click.performClick());
             TextView change = find(a.getWindow().getDecorView(), "切换到中文");
             assertNotNull(change);
             change.performClick();
@@ -32,6 +37,8 @@ public class UiSmokeTest {
             assertNotNull(find(a.getWindow().getDecorView(), "信息本"));
           });
     }
+    for (Actions.Action action : Actions.ALL)
+      assertFalse(SettingsHelp.action(action.id()).isBlank());
     long folder = app.info.add(0, "test-folder-" + System.nanoTime(), "folder", "");
     assertFalse(app.info.list(0, "test-folder-", 0).isEmpty());
     long child = app.info.add(folder, "nested", "folder", "");

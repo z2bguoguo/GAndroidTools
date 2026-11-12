@@ -43,11 +43,41 @@ public final class Actions {
 
   private Actions() {}
 
-  public static List<Action> enabled() {
-    String selected =
-        ToolApp.app.config.text(
-            "actions", "screenshot,capture,snapshot,find,park,tasks,info,record,macro,dock,home");
-    List<String> ids = java.util.Arrays.asList(selected.split(","));
-    return ALL.stream().filter(a -> ids.contains(a.id)).toList();
+  public static List<String> slots() {
+    java.util.Set<String> allowed =
+        ALL.stream().map(Action::id).collect(java.util.stream.Collectors.toSet());
+    String stored = ToolApp.app.config.text("radialSlots", "");
+    if (stored.isEmpty()) {
+      String legacy = ToolApp.app.config.text("actions", "");
+      stored = legacy.isEmpty() ? RadialBindings.DEFAULT : legacy;
+      stored = String.join(",", RadialBindings.parse(stored, allowed));
+      ToolApp.app.config.set("radialSlots", stored);
+    }
+    return RadialBindings.parse(stored, allowed);
+  }
+
+  public static String position(int i, boolean left) {
+    String[] zh =
+        left ? new String[] {"上", "右上", "右", "右下", "下"} : new String[] {"上", "左上", "左", "左下", "下"};
+    String[] en =
+        left
+            ? new String[] {"Top", "Upper right", "Right", "Lower right", "Bottom"}
+            : new String[] {"Top", "Upper left", "Left", "Lower left", "Bottom"};
+    return ToolApp.t(zh[i], en[i]);
+  }
+
+  public static android.widget.TextView ball(
+      android.content.Context c, String id, String position) {
+    String label = id.equals("none") ? ToolApp.t("未分配", "Empty") : label(id);
+    android.widget.TextView v = Ui.text(c, label, 10, id.equals("none") ? Ui.MUTED : Ui.INK);
+    v.setGravity(android.view.Gravity.CENTER);
+    v.setPadding(Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 4));
+    v.setMaxLines(3);
+    v.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    v.setBackground(Ui.round(id.equals("none") ? 0xffe5eae7 : 0xffdceee6, Ui.dp(c, 100)));
+    v.setElevation(Ui.dp(c, 2));
+    v.setContentDescription(position + " · " + label);
+    v.setTooltipText(position + " · " + label + "\n" + SettingsHelp.action(id));
+    return v;
   }
 }

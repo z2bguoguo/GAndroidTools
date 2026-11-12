@@ -225,8 +225,27 @@ public final class CaptureSession {
           try {
             if (frames.isEmpty()) throw new IllegalStateException("Capture at least one frame");
             List<File> files = stitch();
+            int saved = 0;
+            boolean toGallery = app.config.flag("saveGallery", true);
+            if (toGallery)
+              for (File file : files)
+                try {
+                  GallerySaver.save(app, file);
+                  saved++;
+                  app.log.add("INFO", "gallery", "Long capture saved to Pictures/GAndroidTools");
+                } catch (Exception error) {
+                  app.log.error("gallery", error);
+                }
             Ui.toast(
-                app, ToolApp.t("截图已导出，可在首页导出文件中分享", "Capture exported; share from Home → Exports"));
+                app,
+                toGallery
+                    ? ToolApp.t("已导出 ", "Exported ")
+                        + files.size()
+                        + ToolApp.t(" 张，相册已保存 ", " image(s); gallery saved ")
+                        + saved
+                        + ToolApp.t(" 张。", " image(s).")
+                    : ToolApp.t(
+                        "截图已导出，可在首页导出文件中分享", "Capture exported; share from Home → Exports"));
             app.main.post(() -> overlay.showFiles(files));
           } catch (Exception e) {
             fail(e);

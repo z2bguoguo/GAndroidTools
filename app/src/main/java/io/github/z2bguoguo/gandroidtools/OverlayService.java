@@ -43,6 +43,7 @@ public final class OverlayService extends Service {
   private FrozenCapture frozen;
   private long shotGeneration;
   private final TapGate taps = new TapGate();
+  private final MoveGesture moveGesture = new MoveGesture();
   private final Runnable singleTap =
       () -> {
         if (taps.consumeSingle(android.os.SystemClock.elapsedRealtime()) && bubble != null)
@@ -147,17 +148,21 @@ public final class OverlayService extends Service {
     wm.addView(bubble, bubbleParams);
     bubble.setOnClickListener(
         v -> {
-          if (menu == null) showMenu();
-          else closeMenu();
+          moveGesture.tap(android.os.SystemClock.elapsedRealtime());
+          bubble.announceForAccessibility(
+              ToolApp.t(
+                  "已准备移动，再按住并拖动；长按展开功能",
+                  "Ready to move: press and drag again; hold to open actions"));
         });
     bubble.setOnTouchListener(
         new View.OnTouchListener() {
           float x, y;
           int oldX, oldY;
-          boolean moved, longPress;
+          boolean moved, longPress, moveAllowed;
           final Runnable hold =
               () -> {
                 longPress = true;
+                moveGesture.cancel();
                 taps.cancel();
                 handler.removeCallbacks(singleTap);
                 showMenu();
@@ -175,13 +180,18 @@ public final class OverlayService extends Service {
                 oldY = bubbleParams.y;
                 moved = false;
                 longPress = false;
+                moveAllowed = moveGesture.armed(android.os.SystemClock.elapsedRealtime());
                 handler.postDelayed(hold, ToolApp.app.config.number("longPressDelay"));
               }
               case MotionEvent.ACTION_MOVE -> {
                 float dx = e.getRawX() - x, dy = e.getRawY() - y;
                 if (longPress) {
                   select(e.getRawX(), e.getRawY(), false);
-                } else if (Math.hypot(dx, dy) > Ui.dp(OverlayService.this, 10)) {
+                } else if (moveAllowed && Math.hypot(dx, dy) > Ui.dp(OverlayService.this, 10)) {
+                  closeMenu();
+                  taps.cancel();
+                  handler.removeCallbacks(singleTap);
+                  moveGesture.cancel();
                   moved = true;
                   handler.removeCallbacks(hold);
                   bubbleParams.x = clamp(oldX + (int) dx, 0, screenWidth() - bubble.getWidth());
@@ -198,9 +208,11 @@ public final class OverlayService extends Service {
                   if (taps.tap(now, interval) == TapGate.Result.DOUBLE) {
                     handler.removeCallbacks(singleTap);
                     taps.cancel();
+                    moveGesture.cancel();
                     String selected = ToolApp.app.config.text("doubleTapAction", "screenshot");
                     if (!selected.equals("none")) perform(selected);
                   } else {
+                    moveGesture.tap(now);
                     handler.removeCallbacks(singleTap);
                     handler.postDelayed(singleTap, interval);
                   }
@@ -209,6 +221,9 @@ public final class OverlayService extends Service {
               }
               case MotionEvent.ACTION_CANCEL -> {
                 handler.removeCallbacks(hold);
+                moveGesture.cancel();
+                taps.cancel();
+                handler.removeCallbacks(singleTap);
                 closeMenu();
                 scheduleDock();
               }
@@ -252,62 +267,68 @@ public final class OverlayService extends Service {
 
   private void showMenu() {
     closeMenu();
-    menuActions = Actions.enabled();
+    boolean left = bubbleParams.x + bubble.getWidth() / 2 < screenWidth() / 2;
+    SemiCircleLayout root = new SemiCircleLayout(ui, left);
     menuRows.clear();
-    LinearLayout root = Ui.column(ui);
-    root.setPadding(12, 12, 12, 12);
-    root.setBackground(Ui.round(Color.WHITE, Ui.dp(this, 24)));
-    root.setElevation(Ui.dp(this, 8));
-    for (Actions.Action action : menuActions) {
-      TextView row = Ui.text(ui, action.label(), 15, Ui.INK);
-      row.setMinHeight(Ui.dp(this, 44));
-      row.setPadding(24, 8, 24, 8);
-      row.setOnLongClickListener(
+    menuActions = new ArrayList<>();
+    List<String> slots = Actions.slots();
+    for (int i = 0; i < 5; i++) {
+      String id = slots.get(i);
+      Actions.Action action =
+          Actions.ALL.stream()
+              .filter(a -> a.id().equals(id))
+              .findFirst()
+              .orElse(new Actions.Action("none", "未分配", "Empty"));
+      menuActions.add(action);
+      TextView ball = Actions.ball(ui, id, Actions.position(i, left));
+      ball.setAlpha(id.equals("none") ? .35f : 1);
+      ball.setOnClickListener(
           v -> {
-            if (action.id().equals("screenshot")) {
+            closeMenu();
+            if (!id.equals("none")) perform(id);
+          });
+      ball.setOnLongClickListener(
+          v -> {
+            if (id.equals("screenshot")) {
               closeMenu();
               delayWheel();
               return true;
             }
             return false;
           });
-      row.setOnClickListener(
-          v -> {
-            closeMenu();
-            perform(action.id());
-          });
-      root.addView(row);
-      menuRows.add(row);
+      root.addView(ball);
+      menuRows.add(ball);
     }
-    menu = Ui.scroll(ui, root);
-    int width = Ui.dp(this, 240);
-    WindowManager.LayoutParams p =
-        params(
-            Math.min(width, screenWidth() - Ui.dp(this, 70)),
-            Math.min(Ui.dp(this, 480), screenHeight() - Ui.dp(this, 80)),
-            false);
+    TextView center = Ui.text(ui, "✦", 24, Color.WHITE);
+    center.setGravity(Gravity.CENTER);
+    center.setBackground(Ui.round(Ui.ACCENT, Ui.dp(this, 100)));
+    center.setContentDescription(ToolApp.t("关闭功能菜单", "Close actions"));
+    center.setOnClickListener(v -> closeMenu());
+    root.addView(center);
+    menu = root;
+    int height = Math.min(screenHeight() - Ui.dp(this, 48), Ui.dp(this, 340)),
+        width = Math.min(screenWidth() - Ui.dp(this, 16), Ui.dp(this, 226));
+    WindowManager.LayoutParams p = params(width, height, false);
     p.x =
-        bubbleParams.x < screenWidth() / 2
-            ? bubble.getWidth() + Ui.dp(this, 8)
-            : Math.max(0, bubbleParams.x - width - Ui.dp(this, 8));
+        clamp(
+            left ? bubbleParams.x : bubbleParams.x + bubble.getWidth() - width,
+            0,
+            screenWidth() - width);
     p.y =
         clamp(
-            bubbleParams.y - Ui.dp(this, 100),
+            bubbleParams.y + bubble.getHeight() / 2 - height / 2,
             Ui.dp(this, 24),
-            screenHeight() - p.height - Ui.dp(this, 24));
+            screenHeight() - height - Ui.dp(this, 24));
     wm.addView(menu, p);
   }
 
   private void select(float x, float y, boolean activate) {
+    int index = menu instanceof SemiCircleLayout radial ? radial.direction(x, y) : -1;
     String chosen = null;
     for (int i = 0; i < menuRows.size(); i++) {
-      View row = menuRows.get(i);
-      int[] pos = new int[2];
-      row.getLocationOnScreen(pos);
-      boolean inside =
-          x >= pos[0] && x < pos[0] + row.getWidth() && y >= pos[1] && y < pos[1] + row.getHeight();
-      row.setBackgroundColor(inside ? Color.rgb(221, 238, 231) : Color.TRANSPARENT);
-      if (inside) chosen = menuActions.get(i).id();
+      boolean selected = i == index;
+      menuRows.get(i).setBackground(Ui.round(selected ? 0xffa8d0c1 : 0xffdceee6, Ui.dp(this, 100)));
+      if (selected && !menuActions.get(i).id().equals("none")) chosen = menuActions.get(i).id();
     }
     if (activate) {
       closeMenu();
@@ -476,7 +497,18 @@ public final class OverlayService extends Service {
       }
       case "snapshot" -> capture.snapshot();
       case "find" -> findDialog();
-      case "park" -> taskList(false);
+      case "park" -> {
+        closeFrozen();
+        background(
+            () -> {
+              Thread.sleep(150);
+              JSONObject target = ToolApp.app.bridge.call("focusedTask").getJSONObject("task");
+              ToolApp.app.bridge.call(
+                  "park", new JSONObject().put("taskId", target.getInt("taskId")));
+              Ui.toast(this, ToolApp.t("已移入隐藏屏幕：", "Parked: ") + target.optString("label"));
+            });
+      }
+      case "choosePark" -> taskList(false);
       case "tasks" -> taskList(true);
       case "info" -> new InfoUi(ui, this::showPanel, this::queueInput).open();
       case "infoAdd" ->
@@ -574,7 +606,7 @@ public final class OverlayService extends Service {
     Ui.toggle(
         root,
         "JPEG",
-        ToolApp.t("关闭使用无损 PNG", "Off uses lossless PNG"),
+        SettingsHelp.text("jpeg"),
         ToolApp.app.config.flag("jpeg", false),
         v -> ToolApp.app.config.set("jpeg", v));
     Ui.button(root, ToolApp.t("忽略控件…", "Ignore controls…"), () -> chooseTree(true));
@@ -807,7 +839,8 @@ public final class OverlayService extends Service {
                   if (parked) {
                     android.widget.ImageView preview = new android.widget.ImageView(ui);
                     preview.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-                    preview.setContentDescription(component);
+                    preview.setContentDescription(
+                        task.optString("label", ToolApp.t("应用预览", "Application preview")));
                     card.addView(preview, new LinearLayout.LayoutParams(-1, Ui.dp(this, 160)));
                     ToolApp.app.worker.execute(
                         () -> {
@@ -826,7 +859,7 @@ public final class OverlayService extends Service {
                   }
                   Ui.entry(
                       card,
-                      component.split("/")[0],
+                      task.optString("label", ToolApp.t("应用", "Application")),
                       "Task " + task.optInt("taskId") + " · Display " + task.optInt("displayId"),
                       () -> {
                         closePanel();

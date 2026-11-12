@@ -7,6 +7,10 @@ Native Android toolbox. Java 17, minSdk 26, compile/target SDK 35. Work only in 
 `app/src/main/java/io/github/z2bguoguo/gandroidtools` contains native UI and platform code:
 - ToolApp, Config, EventLog: application state, bilingual preference metadata, bounded rotating logs.
 - Bridge, IRemoteTools AIDL, RemoteService: Shizuku connection and shell-side typed operations.
+- SettingsUi, SettingsHelp: categorized native preferences and authored bilingual tooltips. Every setting and configurable action requires semantic help, with examples for numeric parameters.
+- SemiCircleLayout, RadialBindings, MoveGesture: shared inward-facing five-slot geometry and tap-then-drag movement. Preserve center double tap.
+- GallerySaver: MediaStore pending/publish transactions on API 29+, legacy write permission limited to API 28. Never discard internal exports on gallery failure.
+- CallIdentity: clear/restore incoming Binder identity at every Shizuku entry point before local privileged calls.
 - OverlayService, Actions, Ui: floating gestures, docking, capture toolbar and reusable native cards.
 - FrozenCapture, DelayWheel: image-first frozen screenshot editor and secondary delay wheel. Preserve metadata in memory; never include an unmasked original in an edited export.
 - CaptureSession, OverlapMatcher, Exports: disk-spooled capture, region masks, overlap matching, split exports, .gatpage archives.

@@ -19,7 +19,7 @@
 | --- | --- |
 | **Super background** | Move running tasks to independent virtual displays and restore them from task cards. |
 | **Screenshot** | Freeze pixels and control metadata, then edit control visibility in an overlay; includes a delay wheel. |
-| **Long capture** | Page jumps, smooth swipes and manual frames; select control regions, mask exclusions, match overlaps and split tall exports. |
+| **Long capture** | Page jumps, smooth swipes and manual frames; select control regions, mask exclusions, match overlaps, split tall exports and auto-save to the gallery. |
 | **Super find** | Find text in accessible controls, scroll to matches and briefly highlight them. |
 | **Accessibility manager** | Manage installed accessibility services and re-enable selected services when their enabled setting is removed. |
 | **Super macros** | Explicitly record control actions, then edit, import and run JavaScript automation. |
@@ -30,8 +30,8 @@
 ### Made for everyday use
 
 - Rounded cards in mint and mist blue, with Chinese and English interfaces.
-- Tap to choose or hold and drag through the floating menu; reposition, auto-dock or dock manually, and configure a double-tap action.
-- Choose floating actions visually and adjust capture settings with sliders and switches.
+- An inward-facing semicircle supports hold-and-drag direction selection, tap-then-drag movement, docking and a custom double tap.
+- Assign five action balls and the center double tap visually. Eight settings categories include detailed bilingual help and examples.
 - Private snippets and MFA secrets use Android Keystore encryption with strong biometric verification for each access.
 - Information and scripts stay local. No analytics SDK or page-content upload.
 

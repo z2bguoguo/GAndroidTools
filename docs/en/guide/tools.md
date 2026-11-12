@@ -1,8 +1,16 @@
 # Tools and settings
 
+## Settings categories and help
+
+Settings are grouped into language/appearance, floating gestures, capture/gallery, search/highlight, notebook/input, macros/accessibility, terminal logs and system permissions. Tap ⓘ beside an option for effects, use cases and examples; long press shows its system tooltip. Numeric help also lists the range and default.
+
+The editor and live menu share five semicircle slots from top to bottom. The center edits double tap. Duplicate actions and unassigned slots are supported. Apply floating layout updates button size and opacity immediately.
+
+Long capture enables gallery auto-save by default, publishing each split image under `Pictures/GAndroidTools`. Android 10+ uses MediaStore without gallery read access; Android 8/9 requires storage write permission when enabled. Disabling auto-save retains only internal exports. Gallery failures also retain internal files and report how many images were saved. The gallery and internal copies are managed separately: deleting one does not remove the other.
+
 ## Super background
 
-Choose an existing primary-display task and park it on a public virtual display. The app retains a rendering surface for each parked task, with at most four hidden displays. Task parking requires Android 11 or later. Open **Parked task cards** and tap a card to move it back and focus it. Task state is polled while floating tools run. When the system itself returns a task to display 0 through Recents, its parked record is released at the next poll. Some launchers cannot restore a task across displays; use the restore card in that case. The app does not intercept or replace the system Recents screen. Shutdown restores tracked tasks before removing displays when permitted.
+The floating Park action directly moves the currently focused primary-display app without showing a picker. Inside the toolbox, Choose a running task opens a picker with application titles. Tasks are parked on a public virtual display. The app retains a rendering surface for each parked task, with at most four hidden displays. Task parking requires Android 11 or later. Open **Parked task cards** and tap a card to move it back and focus it. Task state is polled while floating tools run. When the system itself returns a task to display 0 through Recents, its parked record is released at the next poll. Some launchers cannot restore a task across displays; use the restore card in that case. The app does not intercept or replace the system Recents screen. Shutdown restores tracked tasks before removing displays when permitted.
 
 ## Screenshot and delay wheel
 

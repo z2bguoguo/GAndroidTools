@@ -99,12 +99,16 @@ jobs:
           api-level: ${{ matrix.api }}
           arch: x86_64
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest
+          script: |
+            ./gradlew :app:connectedDebugAndroidTest
+            adb pull /sdcard/Android/data/io.github.z2bguoguo.gandroidtools/files/previews app/build/ui-previews
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: device-reports-${{ matrix.api }}
-          path: app/build/reports/androidTests/
+          path: |
+            app/build/reports/androidTests/
+            app/build/ui-previews/
   release:
     needs: [android, docs, secrets, device]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -132,7 +136,7 @@ jobs:
               exit 1
             fi
           done
-          version="${REQUESTED_VERSION:-0.1.0}"
+          version="${REQUESTED_VERSION:-0.2.0}"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo '::error::Use a numeric semantic version'
             exit 1

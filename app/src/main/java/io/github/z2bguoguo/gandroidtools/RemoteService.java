@@ -80,14 +80,30 @@ public final class RemoteService extends IRemoteTools.Stub {
     }
   }
 
+  private final CallIdentity.Identity shellIdentity =
+      new CallIdentity.Identity() {
+        public long clear() {
+          return android.os.Binder.clearCallingIdentity();
+        }
+
+        public void restore(long token) {
+          android.os.Binder.restoreCallingIdentity(token);
+        }
+      };
+
   @Override
   public synchronized String call(String request) {
+    return CallIdentity.run(shellIdentity, () -> dispatch(request));
+  }
+
+  private String dispatch(String request) {
     JSONObject result = new JSONObject();
     try {
       JSONObject p = new JSONObject(request);
       switch (p.getString("action")) {
         case "status" -> {
           result.put("uid", android.os.Process.myUid());
+          result.put("executionUid", android.os.Binder.getCallingUid());
           result.put("automation", automation != null);
           result.put("automationError", automationError);
           result.put("virtualDisplay", context != null);
@@ -224,6 +240,7 @@ public final class RemoteService extends IRemoteTools.Stub {
             throw new IllegalStateException("System rejected accessibility setting");
         }
         case "tasks" -> result.put("tasks", tasks());
+        case "focusedTask" -> result.put("task", focusedTask());
         case "park" -> result.put("task", park(p.getInt("taskId")));
         case "restore" -> restore(p.getInt("taskId"));
         case "parked" -> {
@@ -243,6 +260,7 @@ public final class RemoteService extends IRemoteTools.Stub {
                 new JSONObject()
                     .put("taskId", item.task)
                     .put("component", item.component)
+                    .put("label", appTitle(ComponentName.unflattenFromString(item.component)))
                     .put("displayId", item.display.getDisplay().getDisplayId()));
           }
           result.put("tasks", list);
@@ -418,9 +436,37 @@ public final class RemoteService extends IRemoteTools.Stub {
             new JSONObject()
                 .put("taskId", id)
                 .put("displayId", display)
-                .put("component", top.flattenToShortString()));
+                .put("component", top.flattenToShortString())
+                .put("label", appTitle(top)));
     }
     return out;
+  }
+
+  private String appTitle(ComponentName component) {
+    if (component == null) return "Application";
+    try {
+      return context
+          .getPackageManager()
+          .getApplicationLabel(
+              context.getPackageManager().getApplicationInfo(component.getPackageName(), 0))
+          .toString();
+    } catch (Exception error) {
+      return component.getShortClassName().replace(".", " ").trim();
+    }
+  }
+
+  private JSONObject focusedTask() throws Exception {
+    if (android.os.Build.VERSION.SDK_INT < 30)
+      throw new IllegalStateException("Task parking requires Android 11 or later");
+    Object info = taskInterface().getMethod("getFocusedRootTaskInfo").invoke(taskService());
+    if (info == null) throw new IllegalStateException("No foreground task");
+    int id = info.getClass().getField("taskId").getInt(info);
+    JSONArray all = tasks();
+    for (int i = 0; i < all.length(); i++) {
+      JSONObject task = all.getJSONObject(i);
+      if (task.getInt("taskId") == id && task.getInt("displayId") == 0) return task;
+    }
+    throw new IllegalStateException("Focused task is not on the primary display");
   }
 
   private JSONObject park(int task) throws Exception {
@@ -553,6 +599,10 @@ public final class RemoteService extends IRemoteTools.Stub {
 
   @Override
   public synchronized ParcelFileDescriptor screenshot(int display) {
+    return CallIdentity.run(shellIdentity, () -> screenshotInternal(display));
+  }
+
+  private ParcelFileDescriptor screenshotInternal(int display) {
     try {
       Bitmap bitmap;
       if (display < 0) {
@@ -596,6 +646,15 @@ public final class RemoteService extends IRemoteTools.Stub {
 
   @Override
   public synchronized void destroy() {
+    CallIdentity.run(
+        shellIdentity,
+        () -> {
+          destroyInternal();
+          return null;
+        });
+  }
+
+  private void destroyInternal() {
     for (Parked p : new ArrayList<>(parked.values()))
       try {
         move(p.task, 0);

@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -13,9 +12,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.fragment.app.FragmentActivity;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import org.json.JSONObject;
 
 public final class MainActivity extends FragmentActivity {
@@ -286,7 +283,7 @@ public final class MainActivity extends FragmentActivity {
     Ui.button(
         root,
         ToolApp.t("选择运行中任务并移入隐藏屏幕", "Choose a running task to park"),
-        () -> OverlayService.start(this, "park"));
+        () -> OverlayService.start(this, "choosePark"));
   }
 
   private void input(String text) {
@@ -303,179 +300,24 @@ public final class MainActivity extends FragmentActivity {
   }
 
   private void settings() {
-    LinearLayout root =
-        screen(
-            ToolApp.t("设置", "Settings"),
-            ToolApp.t("每个习惯，都有自己的位置。", "A place for every preference."));
-    LinearLayout appearance = Ui.card(root);
-    appearance.addView(Ui.text(this, ToolApp.t("语言 / Language", "Language / 语言"), 18, Ui.INK));
-    Ui.button(
-        appearance,
-        ToolApp.t("切换到 English", "切换到中文"),
-        () -> {
-          app.config.set("language", app.config.english() ? "zh" : "en");
-          build();
-        });
-    Ui.button(
-        appearance,
-        ToolApp.t("跟随系统语言", "Use system language"),
-        () -> {
-          app.config.set("language", "system");
-          build();
-        });
-    LinearLayout floatCard = Ui.card(root);
-    floatCard.addView(Ui.text(this, ToolApp.t("悬浮菜单预览", "Floating menu preview"), 19, Ui.INK));
-    TextView preview =
-        Ui.text(
-            this,
-            Actions.enabled().stream()
-                .map(Actions.Action::label)
-                .collect(java.util.stream.Collectors.joining("  ·  ")),
-            14,
-            Ui.ACCENT);
-    floatCard.addView(preview);
-    for (Actions.Action a : Actions.ALL) {
-      boolean selected =
-          Arrays.asList(
-                  app.config
-                      .text(
-                          "actions",
-                          "screenshot,capture,snapshot,find,park,tasks,info,record,macro,dock,home")
-                      .split(","))
-              .contains(a.id());
-      Ui.toggle(
-          floatCard,
-          a.label(),
-          "",
-          selected,
-          value -> {
-            java.util.LinkedHashSet<String> ids =
-                new java.util.LinkedHashSet<>(
-                    Arrays.asList(
-                        app.config
-                            .text(
-                                "actions",
-                                "screenshot,capture,snapshot,find,park,tasks,info,record,macro,dock,home")
-                            .split(",")));
-            if (value) ids.add(a.id());
-            else ids.remove(a.id());
-            app.config.set("actions", String.join(",", ids));
-            preview.setText(
-                Actions.enabled().stream()
-                    .map(Actions.Action::label)
-                    .collect(java.util.stream.Collectors.joining("  ·  ")));
-          });
-    }
-    LinearLayout tap = Ui.card(root);
-    tap.addView(
-        Ui.text(this, ToolApp.t("悬浮球双击动作", "Floating button double-tap action"), 18, Ui.INK));
-    List<String> choices = new ArrayList<>();
-    choices.add(ToolApp.t("不执行动作", "No action"));
-    for (Actions.Action a : Actions.ALL) choices.add(a.label());
-    android.widget.Spinner doubleTap = new android.widget.Spinner(this);
-    doubleTap.setAdapter(
-        new android.widget.ArrayAdapter<>(
-            this, android.R.layout.simple_spinner_dropdown_item, choices));
-    int selected = 0;
-    for (int i = 0; i < Actions.ALL.size(); i++)
-      if (Actions.ALL.get(i).id().equals(app.config.text("doubleTapAction", "screenshot")))
-        selected = i + 1;
-    doubleTap.setSelection(selected);
-    doubleTap.setOnItemSelectedListener(
-        new android.widget.AdapterView.OnItemSelectedListener() {
-          @Override
-          public void onItemSelected(
-              android.widget.AdapterView<?> parent, View view, int pos, long id) {
-            app.config.set("doubleTapAction", pos == 0 ? "none" : Actions.ALL.get(pos - 1).id());
-          }
+    new SettingsUi(this, this::replaceContent, this::build).open();
+  }
 
-          @Override
-          public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-        });
-    tap.addView(doubleTap);
-    for (String group : List.of("overlay", "capture", "other")) {
-      LinearLayout card = Ui.card(root);
-      card.addView(
-          Ui.text(
-              this,
-              ToolApp.t(
-                  group.equals("overlay") ? "悬浮窗" : group.equals("capture") ? "截图高级选项" : "查找、输入与运行",
-                  group.equals("overlay")
-                      ? "Floating window"
-                      : group.equals("capture") ? "Advanced capture" : "Search, input and runtime"),
-              19,
-              Ui.INK));
-      for (Config.Option o : Config.OPTIONS) {
-        boolean floating =
-            List.of("collapse", "ballSize", "opacity", "doubleTapWindow", "longPressDelay")
-                .contains(o.key());
-        boolean capturing =
-            List.of(
-                    "settle",
-                    "duration",
-                    "overlap",
-                    "maxFrames",
-                    "maxHeight",
-                    "topCrop",
-                    "bottomCrop",
-                    "jpegQuality")
-                .contains(o.key());
-        if (group.equals("overlay") && floating
-            || group.equals("capture") && capturing
-            || group.equals("other") && !floating && !capturing) Ui.slider(card, o);
-      }
+  @Override
+  public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+    super.onRequestPermissionsResult(request, permissions, results);
+    if (request == SettingsUi.GALLERY_PERMISSION) {
+      boolean granted =
+          results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+      app.config.set("saveGallery", granted);
+      Ui.toast(
+          this,
+          granted
+              ? ToolApp.t("已允许，长截图将自动保存到相册", "Allowed; long captures will auto-save to gallery")
+              : ToolApp.t("未授权；仍会保留应用内导出", "Permission denied; internal exports remain available"));
+      if (page.equals("settings"))
+        new SettingsUi(this, this::replaceContent, this::build).category("capture");
     }
-    LinearLayout flags = Ui.card(root);
-    Ui.toggle(
-        flags,
-        "JPEG",
-        ToolApp.t("关闭使用无损 PNG", "Off uses lossless PNG"),
-        app.config.flag("jpeg", false),
-        v -> app.config.set("jpeg", v));
-    Ui.toggle(
-        flags,
-        ToolApp.t("查找区分大小写", "Case-sensitive search"),
-        "",
-        app.config.flag("caseSensitive", false),
-        v -> app.config.set("caseSensitive", v));
-    Ui.toggle(
-        flags,
-        ToolApp.t("快照包含所有可访问窗口", "Include all accessible windows"),
-        ToolApp.t("可能包含键盘和系统窗口的控件信息", "May include keyboard and system-window metadata"),
-        app.config.flag("allWindows", false),
-        v -> app.config.set("allWindows", v));
-    Ui.toggle(
-        flags,
-        ToolApp.t("宏录制文本内容", "Record text in macros"),
-        ToolApp.t(
-            "仅在主动录制时保存非密码字段文本；分享脚本前请检查。",
-            "Saves non-password field values only while recording. Review scripts before sharing."),
-        app.config.flag("recordText", false),
-        v -> app.config.set("recordText", v));
-    Ui.toggle(
-        flags,
-        ToolApp.t("日志自动滚动", "Follow terminal logs"),
-        "",
-        app.config.flag("logFollow", true),
-        v -> app.config.set("logFollow", v));
-    Ui.button(
-        flags,
-        ToolApp.t("应用悬浮球外观", "Apply floating button appearance"),
-        () -> {
-          if (OverlayService.instance != null) OverlayService.start(this, "refresh");
-        });
-    Ui.button(
-        flags,
-        ToolApp.t("系统悬浮窗权限", "System overlay permission"),
-        () ->
-            startActivity(
-                new Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    android.net.Uri.parse("package:" + getPackageName()))));
-    Ui.button(
-        flags,
-        ToolApp.t("系统无障碍设置", "System accessibility settings"),
-        () -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
   }
 
   private void macros() {

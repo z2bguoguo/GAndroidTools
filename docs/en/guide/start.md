@@ -7,12 +7,14 @@ Android 8.0 or later, Shizuku API 13, and an active Shizuku service started with
 1. Install an APK from Releases. The preview channel is published after quality checks; a stable build is a manual release.
 2. Start Shizuku, open Home and select **Connect / authorize Shizuku**.
 3. Grant **Display over other apps**, then start floating tools. A visible notification provides a stop action.
-4. Switch to the target application. Tap the floating button, or hold it and drag onto an action.
+4. Switch to the target application. Hold the floating button, drag toward an action and release.
 5. For control recording, enable **GAndroidTools · Input and macro recording** in system accessibility settings. Information filling can use either this bridge or Shizuku automation.
 
 ## Floating gestures
 
-A short drag repositions the button. A tap opens a menu. Hold until the menu appears, drag onto a row and release to activate it. Settings control button size, opacity, delay and the selected action list. Set auto-dock delay to zero to disable it. **Dock now** immediately leaves a small handle at the nearest edge.
+Five action balls open on the inward-facing semicircle: rightward on the left edge, leftward on the right edge. Hold until the threshold, drag toward an action and release. Tap once, then press and drag to move; an unarmed short drag does not move the button. Double tap runs the center binding.
+
+Under **Settings → Floating button and gestures**, tap outer balls to assign fixed positions and the center to set double tap. Preview sides demonstrate mirroring; the live side follows button position. Zero disables automatic docking; Dock now remains available.
 
 ## Privacy
 

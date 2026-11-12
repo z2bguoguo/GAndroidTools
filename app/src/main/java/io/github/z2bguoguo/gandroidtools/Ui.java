@@ -130,6 +130,57 @@ public final class Ui {
     return e;
   }
 
+  public static TextView helpHeading(LinearLayout parent, String label, String explanation) {
+    Context c = parent.getContext();
+    LinearLayout row = row(c);
+    TextView help = text(c, "ⓘ", 22, ACCENT);
+    help.setGravity(android.view.Gravity.CENTER);
+    help.setMinWidth(dp(c, 44));
+    help.setMinHeight(dp(c, 44));
+    help.setContentDescription(ToolApp.t("说明：", "Help: ") + label);
+    help.setTooltipText(explanation);
+    help.setOnClickListener(
+        v -> {
+          TextView copy = body(c, explanation);
+          copy.setPadding(dp(c, 20), dp(c, 8), dp(c, 20), dp(c, 20));
+          dialog(c)
+              .setTitle(label)
+              .setView(scroll(c, copy))
+              .setPositiveButton(ToolApp.t("知道了", "Got it"), null)
+              .show();
+        });
+    row.addView(help);
+    TextView title = text(c, label, 16, INK);
+    row.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+    parent.addView(row);
+    return title;
+  }
+
+  public static void helpButton(
+      LinearLayout parent, String label, String explanation, Runnable action) {
+    Context c = parent.getContext();
+    LinearLayout row = row(c);
+    TextView help = text(c, "ⓘ", 22, ACCENT);
+    help.setMinWidth(dp(c, 44));
+    help.setMinHeight(dp(c, 48));
+    help.setGravity(android.view.Gravity.CENTER);
+    help.setContentDescription(ToolApp.t("说明：", "Help: ") + label);
+    help.setTooltipText(explanation);
+    help.setOnClickListener(
+        v -> {
+          TextView copy = body(c, explanation);
+          copy.setPadding(dp(c, 16), dp(c, 8), dp(c, 16), dp(c, 16));
+          dialog(c)
+              .setTitle(label)
+              .setView(scroll(c, copy))
+              .setPositiveButton(ToolApp.t("知道了", "Got it"), null)
+              .show();
+        });
+    row.addView(help);
+    button(row, label, action);
+    parent.addView(row);
+  }
+
   public static void toggle(
       LinearLayout parent,
       String title,
@@ -139,8 +190,10 @@ public final class Ui {
     Context c = parent.getContext();
     LinearLayout r = row(c);
     LinearLayout copy = column(c);
-    copy.addView(text(c, title, 16, INK));
-    if (!hint.isBlank()) copy.addView(body(c, hint));
+    if (!hint.isBlank()) {
+      helpHeading(copy, title, hint);
+      copy.addView(body(c, hint.split("\\n\\n", 2)[0]));
+    } else copy.addView(text(c, title, 16, INK));
     r.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
     SwitchMaterial s = new SwitchMaterial(c);
     s.setUseMaterialThemeColors(true);
@@ -156,8 +209,9 @@ public final class Ui {
     Context c = parent.getContext();
     Config config = ToolApp.app.config;
     String name = config.english() ? option.en() : option.zh();
-    TextView title = text(c, name + " · " + config.number(option.key()), 15, INK);
-    parent.addView(title);
+    TextView title =
+        helpHeading(
+            parent, name + " · " + config.number(option.key()), SettingsHelp.option(option));
     Slider s = new Slider(c);
     s.setValueFrom(option.min());
     s.setValueTo(option.max());

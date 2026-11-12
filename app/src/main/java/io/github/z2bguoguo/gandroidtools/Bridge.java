@@ -25,6 +25,13 @@ public final class Bridge {
                 try {
                   JSONObject status = call("status", new JSONObject());
                   app.log.add(
+                      "INFO",
+                      "shizuku.identity",
+                      "processUid="
+                          + status.optInt("uid")
+                          + " · executionUid="
+                          + status.optInt("executionUid"));
+                  app.log.add(
                       status.optBoolean("automation") ? "INFO" : "WARN",
                       "capabilities",
                       status.optBoolean("automation")
