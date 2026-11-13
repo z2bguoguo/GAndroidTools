@@ -70,6 +70,8 @@ public final class MainActivity extends FragmentActivity {
     resumed = true;
     handler.removeCallbacks(pulse);
     handler.postDelayed(pulse, 1000);
+    UpdateClient.installPending(this);
+    UpdateClient.check(this, false);
   }
 
   @Override
@@ -198,6 +200,42 @@ public final class MainActivity extends FragmentActivity {
                     : ToolApp.t("运行中", "Active"))));
     Ui.button(
         status, ToolApp.t("连接 / 授权 Shizuku", "Connect / authorize Shizuku"), app.bridge::authorize);
+    status.addView(Ui.body(this, app.bridge.controlStatus()));
+    Ui.helpButton(
+        status,
+        ToolApp.t("启用控件兼容通道", "Enable control fallback"),
+        ToolApp.t(
+            "系统 UiAutomation 同时只能由一个工具使用。此入口通过 Shizuku"
+                + " 开启本应用的可选无障碍服务，用于读取控件树、查找、宏与输入，不会断开其他工具。密码内容不读取、不上传。若其他工具暂停了全部无障碍服务，需要先停止该工具。可在无障碍管理中关闭本服务。",
+            "UiAutomation is exclusive. This enables this app's optional accessibility service"
+                + " through Shizuku for control trees, find, macros and input without disconnecting"
+                + " other tools. Password content is excluded and nothing is uploaded. A tool"
+                + " suppressing all accessibility services must be stopped first. Disable this"
+                + " service in Accessibility management."),
+        () ->
+            app.worker.execute(
+                () -> {
+                  try {
+                    app.bridge.call(
+                        "service",
+                        new org.json.JSONObject()
+                            .put(
+                                "component",
+                                new android.content.ComponentName(this, InputService.class)
+                                    .flattenToString())
+                            .put("enabled", true));
+                    Ui.toast(
+                        this,
+                        ToolApp.t(
+                            "兼容通道已启用，等待系统连接",
+                            "Fallback enabled; waiting for the system connection"));
+                  } catch (Exception error) {
+                    app.log.error("controls.enable", error);
+                    Ui.toast(this, error.getMessage());
+                  }
+                }));
+    Ui.button(status, ToolApp.t("重试控件连接", "Retry control connection"), app.bridge::retryControls);
+
     Ui.button(
         status,
         OverlayService.instance == null
@@ -209,6 +247,11 @@ public final class MainActivity extends FragmentActivity {
           home();
         });
     LinearLayout entries = Ui.card(root);
+    Ui.entry(
+        entries,
+        ToolApp.t("检查更新", "Check for updates"),
+        BuildConfig.VERSION_NAME,
+        () -> UpdateClient.check(this, true));
     Ui.entry(
         entries,
         ToolApp.t("终端日志", "Terminal logs"),

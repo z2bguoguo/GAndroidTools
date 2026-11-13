@@ -6,6 +6,8 @@ Native Android toolbox. Java 17, minSdk 26, compile/target SDK 35. Work only in 
 
 `app/src/main/java/io/github/z2bguoguo/gandroidtools` contains native UI and platform code:
 - ToolApp, Config, EventLog: application state, bilingual preference metadata, bounded rotating logs.
+- UpdateClient, UpdatePolicy: public Pages metadata, bounded downloads, pinned APK verification and Android installation. Never embed credentials, accept arbitrary download hosts or bypass signature/version checks.
+- ControlTree, ControlPicker, ControlPreview: provider/session-bound node caches, opaque expandable hierarchy, nearby selection and PNG alpha masks. UiAutomation conflicts must not disconnect other tools. Native accessibility fallback is user enabled.
 - Bridge, IRemoteTools AIDL, RemoteService: Shizuku connection and shell-side typed operations.
 - SettingsUi, SettingsHelp: categorized native preferences and authored bilingual tooltips. Every setting and configurable action requires semantic help, with examples for numeric parameters.
 - SemiCircleLayout, RadialBindings, MoveGesture: shared inward-facing five-slot geometry and tap-then-drag movement. Preserve center double tap.
@@ -40,4 +42,4 @@ CI runs gitleaks, actionlint and emulator smoke checks on API 26/35. A UI emulat
 
 ## Release
 
-Pushes to main publish prereleases after quality jobs. A manually requested stable release needs an explicit numeric semantic version. Persistent signing uses four ANDROID_* Actions secrets; use scripts/setup_signing.py from a trusted authenticated host. Wiki deploys when PAGES_ENABLED=true and Pages uses Actions. Do not change repository visibility automatically.
+Pushes to main publish prereleases after quality jobs. A manually requested stable release needs an explicit numeric semantic version. Persistent signing uses four ANDROID_* Actions secrets; use scripts/setup_signing.py from a trusted authenticated host. Wiki and public update metadata deploy together after the verified signed release when PAGES_ENABLED=true and Pages uses Actions. Do not change repository visibility automatically.

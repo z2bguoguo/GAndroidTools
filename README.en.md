@@ -26,10 +26,12 @@
 | **Page snapshot** | Export a screenshot and control metadata as a `.gatpage` archive readable by ZIP tools. |
 | **Information notebook** | Nested folders, quick filling, deferred input, encrypted private snippets and live MFA codes. |
 | **Terminal logs** | Live output, severity and keyword filters, pause, follow mode and rotating log export. |
+| **Automatic updates** | Periodic checks, download progress and verification of the file and original signing identity before Android installation. |
 
 ### Made for everyday use
 
 - Rounded cards in mint and mist blue, with Chinese and English interfaces.
+- Single and long captures share expandable control trees, readable control types and nearby multi-selection on hold; hidden regions export with PNG alpha.
 - An inward-facing semicircle supports hold-and-drag direction selection, tap-then-drag movement, docking and a custom double tap.
 - Assign five action balls and the center double tap visually. Eight settings categories include detailed bilingual help and examples.
 - Private snippets and MFA secrets use Android Keystore encryption with strong biometric verification for each access.

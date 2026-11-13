@@ -33,9 +33,11 @@ public final class TreeNode {
   }
 
   public String label() {
-    return (text.isEmpty() ? description : text)
+    return ControlLabels.title(this)
         + "\n"
-        + (id.isEmpty() ? className : id)
+        + ControlLabels.type(className, ToolApp.app.config.english())
+        + " · "
+        + (id.isEmpty() ? path : id)
         + " "
         + bounds.toShortString();
   }

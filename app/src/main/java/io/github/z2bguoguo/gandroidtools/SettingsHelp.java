@@ -17,6 +17,20 @@ public final class SettingsHelp {
 
   static {
     add(
+        "updateHours",
+        "打开应用时，距离上次成功检查超过此时长才再次检查。例：24 表示一天一次。手动检查不受间隔限制，下载与安装仍由你确认。",
+        "On launch, check only after this many hours since a successful check. Example: 24 checks"
+            + " once a day. Manual checks ignore this interval; download and installation need your"
+            + " confirmation.");
+    add(
+        "autoUpdate",
+        "打开应用时自动检查发布的新版本。仅发送普通版本请求，不上传日志、页面或用户信息。发现新版后提示下载，校验"
+            + " SHA-256、版本、包名和原签名，再交给安卓安装器。可以关闭并改为手动检查。",
+        "Automatically check published releases on app launch. No logs, page content or user"
+            + " information are uploaded. Download is confirmed, SHA-256, version, package and"
+            + " original signing identity are checked, then Android handles installation. Disable"
+            + " to check manually.");
+    add(
         "screenshotDelay",
         "点击截图后等待指定秒数，再冻结画面与控件树。等待期间可以切换应用或关闭菜单，悬浮球显示倒计时；取消延迟截图会终止本次等待。\n\n"
             + "例：设置 3 秒后点击截图，有 3 秒时间打开目标弹窗。长按截图功能球可用转盘临时覆盖此设置。",

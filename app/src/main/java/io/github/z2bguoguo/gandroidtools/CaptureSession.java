@@ -29,6 +29,7 @@ public final class CaptureSession {
   private final List<TreeNode> include = new ArrayList<>(), exclude = new ArrayList<>();
   private File directory;
   private JSONObject firstTree;
+  private boolean transparencyUsed;
 
   public CaptureSession(OverlayService overlay) {
     this.overlay = overlay;
@@ -63,6 +64,7 @@ public final class CaptureSession {
               throw new IllegalStateException("Cannot create frame directory");
             frames.clear();
             firstTree = null;
+            transparencyUsed = false;
             Ui.toast(app, ToolApp.t("截图会话已启动，使用工具栏采集", "Capture session started; use the toolbar"));
           } catch (Exception e) {
             active.set(false);
@@ -198,11 +200,13 @@ public final class CaptureSession {
         throw new IllegalArgumentException("Capture crop is too small");
       bitmap = Bitmap.createBitmap(region.width(), region.height(), Bitmap.Config.ARGB_8888);
       Canvas canvas = new Canvas(bitmap);
-      canvas.drawColor(Color.WHITE);
+      canvas.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
       canvas.drawBitmap(raw, region, new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight()), null);
       android.graphics.Paint paint = new android.graphics.Paint();
-      paint.setColor(Color.WHITE);
+      paint.setXfermode(
+          new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR));
       synchronized (this) {
+        if (!exclude.isEmpty()) transparencyUsed = true;
         for (TreeNode rule : exclude)
           for (TreeNode n : nodes)
             if (matches(rule, n)) {
@@ -315,6 +319,9 @@ public final class CaptureSession {
             Math.max(height, (int) (48L * 1024 * 1024 / 4 / width)));
     Bitmap sheet = Bitmap.createBitmap(width, cap, Bitmap.Config.ARGB_8888);
     Canvas canvas = new Canvas(sheet);
+    android.graphics.Paint replace = new android.graphics.Paint();
+    replace.setXfermode(
+        new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC));
     int filled = 0;
     int[] previous = null;
     try {
@@ -343,7 +350,7 @@ public final class CaptureSession {
                 b,
                 new Rect(0, source, width, source + amount),
                 new Rect(0, filled, width, filled + amount),
-                null);
+                replace);
             filled += amount;
             source += amount;
             if (filled == cap) {
@@ -366,7 +373,12 @@ public final class CaptureSession {
 
   private File saveSheet(Bitmap sheet, int height, int index) throws Exception {
     Bitmap b = Bitmap.createBitmap(sheet, 0, 0, sheet.getWidth(), height);
-    boolean jpeg = app.config.flag("jpeg", false);
+    boolean jpeg;
+    synchronized (this) {
+      jpeg = app.config.flag("jpeg", false) && !transparencyUsed;
+    }
+    if (app.config.flag("jpeg", false) && !jpeg)
+      app.log.add("INFO", "capture.format", "PNG retained for transparent control masks");
     File f =
         Exports.file("long-" + System.currentTimeMillis() + "-" + index + (jpeg ? ".jpg" : ".png"));
     try (FileOutputStream stream = new FileOutputStream(f)) {

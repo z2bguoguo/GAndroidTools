@@ -15,7 +15,13 @@ public final class ErrorDetails {
   public static String message(Throwable error) {
     Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
     Throwable cause = error;
-    while (cause.getCause() != null && seen.add(cause.getCause())) cause = cause.getCause();
+    while (cause.getCause() != null && seen.add(cause.getCause())) {
+      // Android attaches a RemoteException containing only the remote stack to the
+      // actual IllegalStateException. Keep the useful failure instead of that trailer.
+      if (cause.getCause().getMessage() != null
+          && cause.getCause().getMessage().startsWith("Remote stack trace:")) break;
+      cause = cause.getCause();
+    }
     return limit(cause.toString(), 1800);
   }
 

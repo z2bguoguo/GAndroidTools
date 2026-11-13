@@ -4,12 +4,7 @@ package io.github.z2bguoguo.gandroidtools;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Rect;
-import android.graphics.RectF;
-import android.view.MotionEvent;
-import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.File;
@@ -30,7 +25,10 @@ public final class FrozenCapture {
   private JSONObject metadata;
   private List<TreeNode> nodes = List.of();
   private VisibilityState selection;
-  private boolean outlines;
+  private boolean outlines = true;
+  private CaptureSession rulesTarget;
+  private boolean ignoreRules;
+  private boolean[] ruleSelected, includeDraft, excludeDraft;
   private final Paint mask = new Paint();
   private final Paint stroke = new Paint(3);
   private final AtomicBoolean busy = new AtomicBoolean();
@@ -39,6 +37,44 @@ public final class FrozenCapture {
   public FrozenCapture(OverlayService overlay, android.content.Context context) {
     this.overlay = overlay;
     this.context = context;
+  }
+
+  public FrozenCapture(
+      OverlayService overlay,
+      android.content.Context context,
+      CaptureSession target,
+      boolean ignore) {
+    this(overlay, context);
+    rulesTarget = target;
+    ignoreRules = ignore;
+  }
+
+  private boolean checked(int index) {
+    return rulesTarget == null ? selection.visible(index) : ruleSelected[index];
+  }
+
+  private void loadRules() {
+    if (includeDraft == null) {
+      includeDraft = new boolean[nodes.size()];
+      excludeDraft = new boolean[nodes.size()];
+      List<String> included = rulesTarget.ruleKeys(false), excluded = rulesTarget.ruleKeys(true);
+      for (int i = 0; i < nodes.size(); i++) {
+        includeDraft[i] = included.contains(nodes.get(i).path);
+        excludeDraft[i] = excluded.contains(nodes.get(i).path);
+      }
+    }
+    ruleSelected = ignoreRules ? excludeDraft : includeDraft;
+  }
+
+  private void applyRules() {
+    if (metadata == null || !metadata.optBoolean("treeAvailable", true)) return;
+    List<TreeNode> included = new ArrayList<>(), excluded = new ArrayList<>();
+    for (int i = 0; i < nodes.size(); i++) {
+      if (includeDraft[i]) included.add(nodes.get(i));
+      if (excludeDraft[i]) excluded.add(nodes.get(i));
+    }
+    rulesTarget.rules(included, false);
+    rulesTarget.rules(excluded, true);
   }
 
   public void capture() {
@@ -57,7 +93,8 @@ public final class FrozenCapture {
                     .put("capturedAt", frozen.optString("capturedAt"))
                     .put("treeAvailable", frozen.optBoolean("treeAvailable", true))
                     .put("treeError", frozen.optString("treeError"))
-                    .put("captureBackend", frozen.optString("captureBackend"));
+                    .put("captureBackend", frozen.optString("captureBackend"))
+                    .put("controlBackend", frozen.optString("controlBackend"));
             ToolApp.app.log.add("INFO", "screenshot.backend", frozen.optString("captureBackend"));
             if (!frozen.optString("captureWarning").isEmpty())
               ToolApp.app.log.add(
@@ -87,6 +124,7 @@ public final class FrozenCapture {
                           nodes.stream()
                               .map(n -> n.path)
                               .collect(java.util.stream.Collectors.toList()));
+                  if (rulesTarget != null) loadRules();
                   render();
                 });
           } catch (Exception e) {
@@ -107,7 +145,9 @@ public final class FrozenCapture {
     TextView title =
         Ui.text(
             context,
-            ToolApp.t("截图 · 已冻结画面与控件", "Screenshot · frozen image and controls"),
+            rulesTarget == null
+                ? ToolApp.t("截图 · 已冻结画面与控件", "Screenshot · frozen image and controls")
+                : ToolApp.t("长截图 · 轮廓选择", "Long capture · control outlines"),
             17,
             Ui.INK);
     root.addView(title);
@@ -116,29 +156,63 @@ public final class FrozenCapture {
           Ui.body(
               context,
               ToolApp.t(
-                  "控件树连接失败：本次仅保留截图，无法按控件调整。可在首页重新连接后重试。",
-                  "Controls unavailable: this capture contains pixels only. Reconnect on Home and"
-                      + " retry.")));
+                  "控件树不可用：本次保留截图。请在首页启用控件兼容通道，或释放其他工具的连接后重试。",
+                  "Controls unavailable: this capture contains pixels only. Enable the control"
+                      + " fallback on Home, or release the other tool's connection and retry.")));
     }
-    Preview preview = new Preview();
+    ControlPreview preview =
+        new ControlPreview(
+            context,
+            original,
+            nodes,
+            rulesTarget == null,
+            this::checked,
+            this::toggle,
+            indices -> tree(indices));
+    preview.outlines = outlines;
     root.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
     root.addView(
         Ui.body(
             context,
             ToolApp.t(
-                "点击画面切换最小控件；控件树可批量勾选。编辑期间不读取当前页面。",
-                "Tap the image to toggle the smallest control, or use the tree. Editing never"
-                    + " rereads the live page.")));
+                "点击切换最小控件；长按列出附近全部控件。控件树使用独立背景。隐藏区域导出为透明，无法恢复截图中被遮挡的内容。",
+                "Tap a control; hold for all nearby controls. The tree has an opaque background."
+                    + " Hidden pixels export transparently; occluded content cannot be"
+                    + " reconstructed.")));
     LinearLayout row = Ui.row(context);
-    Ui.button(row, ToolApp.t("控件树", "Controls"), this::tree);
+    Ui.button(row, ToolApp.t("控件树", "Controls"), () -> tree(null));
     Ui.button(
         row,
         ToolApp.t("轮廓", "Outlines"),
         () -> {
           outlines = !outlines;
+          preview.outlines = outlines;
           preview.invalidate();
         });
     root.addView(row);
+    if (rulesTarget != null) {
+      Ui.button(
+          root,
+          ignoreRules
+              ? ToolApp.t("当前：忽略控件 · 切换保留", "Ignoring controls · switch to include")
+              : ToolApp.t("当前：保留控件 · 切换忽略", "Including controls · switch to exclude"),
+          () -> {
+            ignoreRules = !ignoreRules;
+            loadRules();
+            render();
+          });
+      Ui.button(
+              root,
+              ToolApp.t("应用长截图规则", "Apply long capture rules"),
+              () -> {
+                applyRules();
+                overlay.closeFrozen();
+              })
+          .setEnabled(metadata.optBoolean("treeAvailable", true));
+      Ui.button(root, ToolApp.t("取消", "Cancel"), overlay::closeFrozen);
+      overlay.showFrozenPanel(root);
+      return;
+    }
     LinearLayout save = Ui.row(context);
     Ui.button(save, ToolApp.t("保存截图", "Save image"), () -> save(false));
     Ui.button(save, ToolApp.t("保存页面包", "Save page archive"), () -> save(true));
@@ -147,43 +221,43 @@ public final class FrozenCapture {
     overlay.showFrozenPanel(root);
   }
 
-  private void tree() {
+  private void tree(List<Integer> nearby) {
     LinearLayout root = Ui.column(context);
-    root.addView(Ui.title(context, ToolApp.t("冻结控件树", "Frozen control tree")));
-    android.widget.ListView list = new android.widget.ListView(context);
-    list.setChoiceMode(android.widget.ListView.CHOICE_MODE_MULTIPLE);
-    List<String> labels = new ArrayList<>();
-    for (TreeNode n : nodes) labels.add("  ".repeat(Math.min(n.depth, 6)) + n.label());
-    list.setAdapter(
-        new android.widget.ArrayAdapter<>(
-            context, android.R.layout.simple_list_item_multiple_choice, labels));
-    for (int i = 0; i < nodes.size(); i++) list.setItemChecked(i, selection.visible(i));
-    list.setOnItemClickListener(
-        (p, v, position, id) -> {
-          toggle(position, list.isItemChecked(position));
-          for (int i = 0; i < nodes.size(); i++) list.setItemChecked(i, selection.visible(i));
-        });
-    root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
+    root.setBackgroundColor(Ui.BG);
+    root.setPadding(Ui.dp(context, 12), Ui.dp(context, 14), Ui.dp(context, 12), Ui.dp(context, 12));
+    root.addView(
+        Ui.title(
+            context,
+            nearby == null
+                ? ToolApp.t("冻结控件树", "Frozen control tree")
+                : ToolApp.t("附近控件 · 可多选", "Nearby controls · multiple selection")));
+    root.addView(
+        Ui.body(
+            context,
+            ToolApp.t(
+                "点击箭头展开层级，点击条目或复选框选择。", "Expand with arrows; select with rows or checkboxes.")));
+    root.addView(
+        ControlPicker.create(context, nodes, nearby, this::checked, this::toggle),
+        new LinearLayout.LayoutParams(-1, 0, 1));
     Ui.button(
         root,
-        ToolApp.t("显示全部", "Show all"),
+        ToolApp.t("显示／选择全部", "Show / select all"),
         () -> {
-          selection.showAll();
-          tree();
+          if (rulesTarget == null) selection.showAll();
+          else java.util.Arrays.fill(ruleSelected, true);
+          tree(nearby);
         });
-    Ui.button(root, ToolApp.t("返回冻结截图", "Back to frozen image"), this::render);
+    Ui.button(root, ToolApp.t("返回轮廓预览", "Back to outline preview"), this::render);
     overlay.showFrozenPanel(root);
   }
 
   private void toggle(int index, boolean show) {
-    selection.set(index, show);
+    if (rulesTarget == null) selection.set(index, show);
+    else ruleSelected[index] = show;
   }
 
   private void paint(Canvas canvas, Bitmap source) {
-    canvas.drawBitmap(source, 0, 0, null);
-    mask.setColor(Color.WHITE);
-    for (int i = 0; i < nodes.size(); i++)
-      if (!selection.visible(i)) canvas.drawRect(nodes.get(i).bounds, mask);
+    ControlPreview.drawImage(canvas, source, nodes, selection::visible);
   }
 
   private void save(boolean archive) {
@@ -263,70 +337,5 @@ public final class FrozenCapture {
     metadata = null;
     nodes = List.of();
     selection = null;
-  }
-
-  private final class Preview extends View {
-    private final RectF bounds = new RectF();
-
-    Preview() {
-      super(context);
-      setContentDescription(
-          ToolApp.t("冻结截图预览，点击切换控件显示", "Frozen screenshot preview; tap to toggle a control"));
-    }
-
-    @Override
-    protected void onDraw(Canvas canvas) {
-      super.onDraw(canvas);
-      if (original == null) return;
-      float scale =
-          Math.min(
-              (float) getWidth() / original.getWidth(), (float) getHeight() / original.getHeight());
-      float left = (getWidth() - original.getWidth() * scale) / 2,
-          top = (getHeight() - original.getHeight() * scale) / 2;
-      bounds.set(left, top, left + original.getWidth() * scale, top + original.getHeight() * scale);
-      canvas.save();
-      canvas.translate(left, top);
-      canvas.scale(scale, scale);
-      paint(canvas, original);
-      if (outlines) {
-        stroke.setStyle(Paint.Style.STROKE);
-        stroke.setStrokeWidth(2 / scale);
-        stroke.setColor(Ui.ACCENT);
-        for (int i = 0; i < nodes.size(); i++)
-          if (selection.visible(i) && !nodes.get(i).bounds.isEmpty())
-            canvas.drawRect(nodes.get(i).bounds, stroke);
-      }
-      canvas.restore();
-    }
-
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-      if (event.getActionMasked() != MotionEvent.ACTION_UP) return true;
-      performClick();
-      if (original == null || !bounds.contains(event.getX(), event.getY())) return true;
-      int x = (int) ((event.getX() - bounds.left) * original.getWidth() / bounds.width()),
-          y = (int) ((event.getY() - bounds.top) * original.getHeight() / bounds.height());
-      long area = Long.MAX_VALUE;
-      int index = -1;
-      for (int i = 0; i < nodes.size(); i++) {
-        Rect r = nodes.get(i).bounds;
-        long size = (long) r.width() * r.height();
-        if (r.contains(x, y) && size > 0 && size < area) {
-          area = size;
-          index = i;
-        }
-      }
-      if (index >= 0) {
-        toggle(index, !selection.visible(index));
-        invalidate();
-      }
-      return true;
-    }
-
-    @Override
-    public boolean performClick() {
-      super.performClick();
-      return true;
-    }
   }
 }

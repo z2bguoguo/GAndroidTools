@@ -10,6 +10,7 @@ import org.json.JSONObject;
 
 public final class InputService extends AccessibilityService {
   public static volatile InputService instance;
+  private final ControlTree controls = new ControlTree("access");
 
   @Override
   protected void onServiceConnected() {
@@ -20,6 +21,7 @@ public final class InputService extends AccessibilityService {
   @Override
   public void onDestroy() {
     instance = null;
+    controls.clear();
     super.onDestroy();
   }
 
@@ -65,6 +67,27 @@ public final class InputService extends AccessibilityService {
     } finally {
       n.recycle();
     }
+  }
+
+  public synchronized JSONObject control(String action, JSONObject request) throws Exception {
+    if (instance != this)
+      throw new IllegalStateException("Accessibility control provider disconnected");
+    JSONObject result = new JSONObject().put("ok", true).put("controlBackend", "accessibility");
+    switch (action) {
+      case "tree" ->
+          result
+              .put(
+                  "nodes",
+                  controls.dump(
+                      request.optBoolean("allWindows", false),
+                      this::getRootInActiveWindow,
+                      this::getWindows))
+              .put("treeAvailable", true);
+      case "node" -> result.put("performed", controls.perform(request));
+      case "input" -> result.put("performed", input(request.getString("value")));
+      default -> throw new IllegalArgumentException("Unsupported accessibility operation");
+    }
+    return result;
   }
 
   public boolean input(String text) {

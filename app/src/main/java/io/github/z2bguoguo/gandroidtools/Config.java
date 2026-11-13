@@ -21,6 +21,15 @@ public final class Config {
   public static final List<Option> OPTIONS =
       List.of(
           new Option(
+              "updateHours",
+              "自动检查更新间隔（小时）",
+              "Update check interval (hours)",
+              1,
+              168,
+              24,
+              "打开软件时按此间隔检查。",
+              "Checks on app launch after this interval."),
+          new Option(
               "screenshotDelay",
               "默认单张截图延迟（秒）",
               "Default screenshot delay (seconds)",

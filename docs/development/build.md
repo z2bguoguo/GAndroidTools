@@ -32,3 +32,5 @@ VitePress 从 `docs` 构建，基础路径为 `/GAndroidTools/`，提供中英�
 发布前会校验密钥库中的私钥证书是否与 `signing-certificate.sha256` 一致。若 `ANDROID_KEY_ALIAS` 填写错误，但密钥库中存在唯一匹配的私钥，工作流会使用经过证书校验的别名并给出警告；不匹配或有歧义时停止。密钥密码仍必须正确，工作流不会生成或替换签名身份。
 
 项目原创代码采用 **GPL-3.0-or-later**（GNU GPL 第 3 版或更新版本），完整许可见仓库 `LICENSE`，授权声明见 `NOTICE`。应用首页可离线查看许可；发布附件同时提供许可声明。第三方组件保留各自许可，见 `THIRD_PARTY_NOTICES.md`。
+
+CI 在验证原签名后，依据已签名 APK 的实际字节生成 `release/update.json`。Pages 部署等待签名发布成功，将 Wiki、APK 与元数据合并到 `/downloads/` 后一同部署。应用自动更新需要保持 `PAGES_ENABLED=true`。公开 Pages 更新入口不需要在应用中嵌入私有源码仓库的凭据。

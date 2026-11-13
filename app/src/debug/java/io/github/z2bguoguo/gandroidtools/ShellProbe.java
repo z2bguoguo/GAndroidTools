@@ -46,7 +46,33 @@ public final class ShellProbe {
       if (fallback.getWidth() < 1 || fallback.getHeight() < 1)
         throw new AssertionError("Fallback frame unavailable");
       fallback.recycle();
-      System.out.println("GAT_SHELL_PROBE_OK uid=2000 automation=true frozen=true screencap=true");
+      RemoteService contender = new RemoteService(context);
+      JSONObject busy = new JSONObject(contender.call("{\"action\":\"status\"}"));
+      if (!busy.optString("automationState").equals("BUSY"))
+        throw new AssertionError("Expected exclusive connection conflict");
+      JSONObject degraded = new JSONObject(contender.call("{\"action\":\"freeze\"}"));
+      if (!degraded.optBoolean("ok")
+          || degraded.optBoolean("treeAvailable")
+          || !degraded.optString("captureBackend").equals("shell screencap"))
+        throw new AssertionError("Busy capture did not retain pixels");
+      try (ParcelFileDescriptor fd = contender.screenshot(-degraded.getInt("captureId"));
+          ParcelFileDescriptor.AutoCloseInputStream input =
+              new ParcelFileDescriptor.AutoCloseInputStream(fd)) {
+        Bitmap pixels = BitmapFactory.decodeStream(input);
+        if (pixels == null) throw new AssertionError("Busy screenshot unavailable");
+        pixels.recycle();
+      }
+      if (!new JSONObject(service.call("{\"action\":\"status\"}")).optBoolean("automation"))
+        throw new AssertionError("Competing attempt disrupted owner");
+      service.releaseAutomation();
+      JSONObject recovered = new JSONObject(contender.call("{\"action\":\"retryAutomation\"}"));
+      if (!recovered.optBoolean("automation"))
+        throw new AssertionError(
+            "Connection did not recover after owner released it: " + recovered);
+      contender.releaseAutomation();
+      System.out.println(
+          "GAT_SHELL_PROBE_OK uid=2000 automation=true frozen=true screencap=true busyFallback=true"
+              + " recovered=true");
       service.destroy();
     } catch (Throwable error) {
       error.printStackTrace();

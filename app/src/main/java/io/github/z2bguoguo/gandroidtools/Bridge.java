@@ -15,11 +15,37 @@ import rikka.shizuku.Shizuku;
 public final class Bridge {
   private final ToolApp app;
   private volatile IRemoteTools remote;
+  private volatile boolean binding;
+  private volatile String automationState = "DISCONNECTED";
+
+  public String controlStatus() {
+    if (InputService.instance != null && !automationState.equals("READY"))
+      return ToolApp.t("无障碍兼容通道", "Accessibility fallback");
+    return switch (automationState) {
+      case "READY" -> ToolApp.t("Shizuku 控件通道就绪", "Shizuku controls ready");
+      case "BUSY" -> ToolApp.t("系统控件通道被占用", "System control channel occupied");
+      default -> ToolApp.t("控件通道未就绪", "Controls not ready");
+    };
+  }
+
+  public void retryControls() {
+    app.worker.execute(
+        () -> {
+          try {
+            call("retryAutomation");
+          } catch (Exception error) {
+            app.log.error("controls.retry", error);
+          }
+        });
+  }
+
   private final Shizuku.UserServiceArgs args;
   private final ServiceConnection connection =
       new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
+          binding = false;
+          if (remote != null && remote.asBinder().equals(binder)) return;
           remote = IRemoteTools.Stub.asInterface(binder);
           app.log.add("INFO", "shizuku", "User service connected");
           app.worker.execute(
@@ -38,8 +64,10 @@ public final class Bridge {
                       "capabilities",
                       status.optBoolean("automation")
                           ? "UI automation available"
-                          : status.optString(
-                              "automationTrace", status.optString("automationError")));
+                          : status.optString("automationError"));
+                  if (!status.optString("automationTrace").isEmpty())
+                    app.log.add(
+                        "DEBUG", "capabilities.detail", status.getString("automationTrace"));
                   if (!status.optString("contextError").isEmpty())
                     app.log.add("WARN", "shizuku.context", status.getString("contextError"));
                 } catch (Exception e) {
@@ -51,6 +79,8 @@ public final class Bridge {
         @Override
         public void onServiceDisconnected(ComponentName name) {
           remote = null;
+          binding = false;
+          automationState = "DISCONNECTED";
           app.log.add("WARN", "shizuku", "User service disconnected");
         }
       };
@@ -71,6 +101,8 @@ public final class Bridge {
     Shizuku.addBinderDeadListener(
         () -> {
           remote = null;
+          binding = false;
+          automationState = "DISCONNECTED";
           app.log.add("WARN", "shizuku", "Binder died; reauthorization may be required");
         });
     Shizuku.addRequestPermissionResultListener(
@@ -105,28 +137,60 @@ public final class Bridge {
     }
   }
 
-  public void bind() {
+  public synchronized void bind() {
+    if (ready() || binding) return;
     try {
+      binding = true;
       Shizuku.bindUserService(args, connection);
     } catch (Exception e) {
+      binding = false;
       app.log.error("shizuku.bind", e);
     }
   }
 
   public JSONObject call(String action, JSONObject data) throws Exception {
+    long start = android.os.SystemClock.elapsedRealtime();
+    data.put("action", action);
+    InputService access = InputService.instance;
+    if (action.equals("node") && data.optString("key").startsWith("access:")) {
+      if (access == null)
+        throw new IllegalStateException("Accessibility controls disconnected; refresh the tree");
+      return access.control(action, data);
+    }
+    if ((action.equals("tree") || action.equals("input"))
+        && access != null
+        && (!ready() || !automationState.equals("READY"))) return access.control(action, data);
     IRemoteTools service = remote;
     if (service == null)
       throw new IllegalStateException(
           ToolApp.t("Shizuku 服务未连接，请在首页授权", "Shizuku service is not connected; authorize on Home"));
-    long start = android.os.SystemClock.elapsedRealtime();
-    data.put("action", action);
     JSONObject response = new JSONObject(service.call(data.toString()));
+    if (response.has("automationState")) automationState = response.getString("automationState");
     if (!response.optBoolean("ok")) {
+      if ((action.equals("tree") || action.equals("input"))
+          && InputService.instance != null
+          && !automationState.equals("READY")) return InputService.instance.control(action, data);
       app.log.add(
           "ERROR",
           "remote." + action,
           response.optString("errorTrace", response.optString("error")));
       throw new IllegalStateException(response.optString("error", "Remote operation failed"));
+    }
+    if (action.equals("freeze") && !response.optBoolean("treeAvailable") && access != null) {
+      try {
+        JSONObject tree = access.control("tree", new JSONObject());
+        response
+            .put("nodes", tree.getJSONArray("nodes"))
+            .put("treeAvailable", true)
+            .put("treeError", "")
+            .put("controlBackend", "accessibility");
+        app.log.add(
+            "INFO",
+            "controls.fallback",
+            "Frozen controls captured through enabled accessibility service");
+      } catch (Exception error) {
+        app.log.add("WARN", "controls.fallback", ErrorDetails.trace(error));
+      }
     }
     app.log.add(
         "DEBUG",

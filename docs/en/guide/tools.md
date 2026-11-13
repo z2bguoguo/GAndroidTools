@@ -14,7 +14,7 @@ The floating Park action directly moves the currently focused primary-display ap
 
 ## Screenshot and delay wheel
 
-**Screenshot and edit** first captures screen pixels and immediately retains the control tree, then opens a full-screen overlay editor. Editing uses this in-memory snapshot and never rereads the target page. Tap the preview to toggle its smallest control, or use checkboxes in the frozen tree. Control outlines are optional. Hidden bounds are painted white; page archives clear hidden control text and descriptions and do not include the original unmasked image. Closing the editor releases the original snapshot.
+**Screenshot and edit** first captures screen pixels and immediately retains the control tree, then opens a full-screen overlay editor. Editing uses this in-memory snapshot and never rereads the target page. Tap the preview to toggle its smallest control, or use checkboxes in the frozen tree. Control outlines are optional. Hidden bounds become transparent; page archives clear hidden control text and descriptions and do not include the original unmasked image. Closing the editor releases the original snapshot.
 
 Tap Screenshot to use the default delay. Hold its menu row, or hold the floating button and drag onto Screenshot before releasing, to open the secondary delay wheel. Presets are 0, 1, 3, 5 and 10 seconds, plus a custom delay. The floating button displays the countdown. **Cancel delayed screenshot** stops a pending capture.
 
@@ -28,7 +28,7 @@ Start a session, then use **＋** for a manual frame, **▶** for automatic fram
 - Smooth mode performs a configurable swipe and waits for rendering.
 - Manual mode captures only the frame you request. Scroll the target app yourself.
 - Capture controls define the union of checked control bounds. No selection means the full screen.
-- Ignored control bounds are painted white on every captured frame.
+- Ignored control bounds become transparent on every captured frame.
 - Use top and bottom cropping to remove fixed headers and footers. An empty region is rejected.
 - Frames are spooled to the app cache. Export uses sampled pixel overlap matching. Unreliable matches start a separate image rather than guessing a seam. Configure the height limit, frame count, PNG/JPEG format and JPEG quality.
 
@@ -47,3 +47,13 @@ Folders nest without a fixed UI depth limit. Each page loads 100 entries with ti
 ## Logs
 
 The terminal has module/message keyword filtering, level filtering, pause and automatic follow. Disk logs rotate at 2 MiB with one previous file. Exports include both files. Input values, OTP URIs and script text are excluded from normal operation logs. Exports are user-initiated through Android sharing.
+
+## Controls and outlines
+
+Both single capture and long-capture rules open an image-first frozen preview. Tap the smallest control or hold a location to list every nearby control with checkboxes. The control tree uses its own opaque background, expandable hierarchy, readable titles and localized common types. Unknown application text and IDs retain their original spelling.
+
+Long capture lets you switch between include and exclude rules, preview either selection and apply the rules to subsequent frames. Include bounds are combined; no include selection captures the full display. Hidden or excluded pixels are transparent in PNG. This cannot reconstruct content that was occluded in the original flat screenshot. Transparent masks force PNG even when JPEG is selected. If controls cannot be read, selected control rules stop capture rather than exporting an unmasked frame.
+
+## Updates
+
+Home → Check for updates performs a manual check. Settings → Language and appearance controls automatic checking and the interval in hours (default 24). Checks run when the app opens, not as a persistent background service. Downloads require confirmation and show progress with cancellation. The app verifies SHA-256, size, package, increasing version and the original signing certificate. Android handles the installation permission and confirmation. No GitHub token is embedded.

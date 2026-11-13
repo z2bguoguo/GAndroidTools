@@ -7,7 +7,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
-import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
@@ -17,7 +16,6 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.ParcelFileDescriptor;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.view.accessibility.AccessibilityWindowInfo;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -37,7 +35,9 @@ public final class RemoteService extends IRemoteTools.Stub {
   private String contextError = "";
   private long automationRetryAt;
   private String captureBackend = "", captureError = "";
-  private final Map<String, AccessibilityNodeInfo> nodes = new LinkedHashMap<>();
+  private final ControlTree controls = new ControlTree("shell");
+  private String automationState = "DISCONNECTED";
+  private Object automationConnection;
   private final Map<Integer, Parked> parked = new LinkedHashMap<>();
 
   private static final class Parked {
@@ -57,8 +57,6 @@ public final class RemoteService extends IRemoteTools.Stub {
   }
 
   private Context context;
-  private int treeBytes;
-  private long treeGeneration;
   private Bitmap frozenBitmap;
   private int frozenId;
 
@@ -117,9 +115,16 @@ public final class RemoteService extends IRemoteTools.Stub {
         UiAutomation.class.getMethod("connect", int.class).invoke(candidate, 1);
       }
       automation = candidate;
+      automationConnection = impl;
+      automationState = "READY";
       automationError = automationTrace = "";
     } catch (Throwable error) {
-      automationError = stage + ": " + ErrorDetails.message(error);
+      automationState = AutomationFailure.classify(error);
+      automationError =
+          automationState.equals("BUSY")
+              ? "UiAutomation is already registered by another connection. Enable the accessibility"
+                  + " control fallback or stop the tool owning that connection, then retry."
+              : stage + ": " + ErrorDetails.message(error);
       automationTrace = stage + "\n" + ErrorDetails.trace(error);
       closeFailedAutomation(candidate, impl);
     }
@@ -161,7 +166,7 @@ public final class RemoteService extends IRemoteTools.Stub {
       } catch (Exception error) {
         captureError = ErrorDetails.trace(error);
       }
-    } else captureError = automationTrace;
+    } else captureError = automationState.equals("BUSY") ? automationError : automationTrace;
     try {
       Bitmap bitmap = ShellCapture.capture();
       captureBackend = "shell screencap";
@@ -197,11 +202,13 @@ public final class RemoteService extends IRemoteTools.Stub {
     try {
       JSONObject p = new JSONObject(request);
       switch (p.getString("action")) {
-        case "status" -> {
+        case "retryAutomation", "status" -> {
+          if (p.getString("action").equals("retryAutomation")) automationRetryAt = 0;
           ensureAutomation();
           result.put("uid", android.os.Process.myUid());
           result.put("executionUid", android.os.Binder.getCallingUid());
           result.put("automation", automation != null);
+          result.put("automationState", automationState);
           result.put("automationError", automationError);
           result.put("automationTrace", automationTrace);
           result.put("contextError", contextError);
@@ -218,16 +225,20 @@ public final class RemoteService extends IRemoteTools.Stub {
           result.put("capturedAt", java.time.Instant.now().toString());
           result.put("captureBackend", captureBackend);
           result.put("captureWarning", captureError);
+          result.put("controlBackend", "UiAutomation");
           try {
             requireAutomation();
             result.put("nodes", dump(false));
             result.put("treeAvailable", true);
           } catch (Exception error) {
-            for (AccessibilityNodeInfo old : nodes.values()) old.recycle();
-            nodes.clear();
+            controls.clear();
             result.put("nodes", new JSONArray());
             result.put("treeAvailable", false);
-            result.put("treeError", ErrorDetails.trace(error));
+            result.put(
+                "treeError",
+                automationState.equals("BUSY") ? automationError : ErrorDetails.trace(error));
+            result.put("controlBackend", "unavailable");
+            result.put("automationState", automationState);
           }
         }
         case "tree" -> {
@@ -236,31 +247,7 @@ public final class RemoteService extends IRemoteTools.Stub {
         }
         case "node" -> {
           requireAutomation();
-          AccessibilityNodeInfo node = nodes.get(p.getString("key"));
-          if (node == null || !node.refresh())
-            throw new IllegalStateException("Control is stale; refresh the page tree");
-          String operation = p.getString("operation");
-          boolean done;
-          if (operation.equals("text")) {
-            if (node.isPassword() || !node.isEditable())
-              throw new SecurityException("This field does not allow snippet input");
-            Bundle b = new Bundle();
-            b.putCharSequence(
-                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, p.getString("value"));
-            done = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b);
-          } else {
-            int action =
-                switch (operation) {
-                  case "click" -> AccessibilityNodeInfo.ACTION_CLICK;
-                  case "longClick" -> AccessibilityNodeInfo.ACTION_LONG_CLICK;
-                  case "show" ->
-                      AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.getId();
-                  case "scroll" -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD;
-                  default -> throw new IllegalArgumentException("Unsupported node action");
-                };
-            done = node.performAction(action);
-          }
-          result.put("performed", done);
+          result.put("performed", controls.perform(p));
         }
         case "input" -> {
           requireAutomation();
@@ -385,7 +372,8 @@ public final class RemoteService extends IRemoteTools.Stub {
         result
             .put("ok", false)
             .put("error", ErrorDetails.message(error))
-            .put("errorTrace", ErrorDetails.trace(error));
+            .put("errorTrace", ErrorDetails.trace(error))
+            .put("automationState", automationState);
       } catch (Exception ignored) {
         /* JSON literals cannot fail. */
       }
@@ -400,76 +388,7 @@ public final class RemoteService extends IRemoteTools.Stub {
   }
 
   private JSONArray dump(boolean all) throws Exception {
-    for (AccessibilityNodeInfo old : nodes.values()) old.recycle();
-    nodes.clear();
-    treeBytes = 0;
-    treeGeneration++;
-    JSONArray out = new JSONArray();
-    if (all) {
-      for (AccessibilityWindowInfo w : automation.getWindows()) {
-        AccessibilityNodeInfo root = w.getRoot();
-        if (root != null) {
-          try {
-            walk(root, "w" + w.getId(), 0, out);
-          } finally {
-            root.recycle();
-          }
-        }
-        w.recycle();
-      }
-    } else {
-      AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-      if (root != null) {
-        try {
-          walk(root, "0", 0, out);
-        } finally {
-          root.recycle();
-        }
-      }
-    }
-    return out;
-  }
-
-  private void walk(AccessibilityNodeInfo n, String key, int depth, JSONArray out)
-      throws Exception {
-    if (nodes.size() >= 2200 || depth > 60 || treeBytes > 600000) return;
-    Rect r = new Rect();
-    n.getBoundsInScreen(r);
-    boolean secret = n.isPassword();
-    String token = treeGeneration + "@" + key;
-    nodes.put(token, AccessibilityNodeInfo.obtain(n));
-    JSONObject encoded =
-        new JSONObject()
-            .put("key", token)
-            .put("path", key)
-            .put("depth", depth)
-            .put("text", secret ? "" : bounded(n.getText()))
-            .put("description", secret ? "" : bounded(n.getContentDescription()))
-            .put("id", n.getViewIdResourceName())
-            .put("class", bounded(n.getClassName()))
-            .put("package", bounded(n.getPackageName()))
-            .put("bounds", new JSONArray(new int[] {r.left, r.top, r.right, r.bottom}))
-            .put("clickable", n.isClickable())
-            .put("editable", n.isEditable())
-            .put("scrollable", n.isScrollable())
-            .put("password", secret)
-            .put("enabled", n.isEnabled());
-    treeBytes += encoded.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
-    out.put(encoded);
-    for (int i = 0; i < n.getChildCount(); i++) {
-      AccessibilityNodeInfo child = n.getChild(i);
-      if (child != null) {
-        try {
-          walk(child, key + "." + i, depth + 1, out);
-        } finally {
-          child.recycle();
-        }
-      }
-    }
-  }
-
-  private static String bounded(CharSequence s) {
-    return s == null ? "" : s.subSequence(0, Math.min(512, s.length())).toString();
+    return controls.dump(all, automation::getRootInActiveWindow, automation::getWindows);
   }
 
   private String setting(String verb, String key, String value) throws Exception {
@@ -767,6 +686,20 @@ public final class RemoteService extends IRemoteTools.Stub {
         });
   }
 
+  synchronized void releaseAutomation() {
+    if (automation != null)
+      try {
+        UiAutomation.class.getMethod("disconnect").invoke(automation);
+      } catch (Exception ignored) {
+        /* Shutdown below also releases this connection. */
+      }
+    closeFailedAutomation(automation, automationConnection);
+    automation = null;
+    automationConnection = null;
+    automationState = "DISCONNECTED";
+    controls.clear();
+  }
+
   private void destroyInternal() {
     for (Parked p : new ArrayList<>(parked.values()))
       try {
@@ -775,12 +708,7 @@ public final class RemoteService extends IRemoteTools.Stub {
       } catch (Exception ignored) {
         /* System will relocate tasks when process dies. */
       }
-    if (automation != null)
-      try {
-        UiAutomation.class.getMethod("disconnect").invoke(automation);
-      } catch (Exception ignored) {
-        /* Process exits below. */
-      }
+    releaseAutomation();
     thread.quitSafely();
     System.exit(0);
   }

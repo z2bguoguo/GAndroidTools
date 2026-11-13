@@ -121,6 +121,18 @@ public final class SettingsUi {
     switch (id) {
       case "appearance" -> {
         LinearLayout card = Ui.card(root);
+        toggle(
+            card,
+            "autoUpdate",
+            ToolApp.t("自动检查更新", "Automatically check updates"),
+            config.flag("autoUpdate", true),
+            value -> config.set("autoUpdate", value));
+        options(root, List.of("updateHours"));
+        Ui.helpButton(
+            card,
+            ToolApp.t("立即检查更新", "Check updates now"),
+            SettingsHelp.text("autoUpdate"),
+            () -> UpdateClient.check(activity, true));
         Ui.helpHeading(
             card, ToolApp.t("界面语言", "Interface language"), SettingsHelp.text("language"));
         Ui.helpButton(

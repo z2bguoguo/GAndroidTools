@@ -10,7 +10,7 @@ android {
         targetSdk = 35
         versionCode = (System.getenv("BUILD_NUMBER") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "0.2.0-dev"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "io.github.z2bguoguo.gandroidtools.GatTestRunner"
     }
     if (System.getenv("CI") == "true") { installation { installOptions.add("-g") } }
     buildFeatures { aidl = true; buildConfig = true }
@@ -64,7 +64,7 @@ listOf("spotlessApply", "spotlessCheck").forEach { taskName ->
 // Package the repository license verbatim for offline viewing.
 val licenseAssets = layout.buildDirectory.dir("generated/licenseAssets")
 val prepareLicenseAssets by tasks.registering(Copy::class) {
-    from(rootProject.projectDir) { include("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md") }
+    from(rootProject.projectDir) { include("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "signing-certificate.sha256") }
     into(licenseAssets)
 }
 android.sourceSets.getByName("main").assets.srcDir(licenseAssets)

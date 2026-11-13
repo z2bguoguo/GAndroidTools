@@ -617,66 +617,9 @@ public final class OverlayService extends Service {
   }
 
   private void chooseTree(boolean ignored) {
-    closePanel();
-    background(
-        () -> {
-          List<TreeNode> nodes = TreeNode.parse(ToolApp.app.bridge.call("tree"));
-          handler.post(
-              () -> {
-                LinearLayout root = Ui.column(ui);
-                root.addView(
-                    Ui.title(
-                        ui,
-                        ignored
-                            ? ToolApp.t("忽略控件", "Ignore controls")
-                            : ToolApp.t("截图控件", "Capture controls")));
-                root.addView(
-                    Ui.body(
-                        ui,
-                        ToolApp.t(
-                            "勾选区域取并集；忽略控件填充为白色。未勾选截图控件时截全屏。",
-                            "Selected capture bounds are combined. Ignored controls are painted"
-                                + " white. No capture selection means full screen.")));
-                List<TreeNode> selected = new ArrayList<>();
-                List<String> prior = capture.ruleKeys(ignored);
-                android.widget.ListView controls = new android.widget.ListView(ui);
-                controls.setChoiceMode(android.widget.ListView.CHOICE_MODE_MULTIPLE);
-                List<String> labels = new ArrayList<>();
-                for (TreeNode n : nodes) labels.add("  ".repeat(Math.min(n.depth, 6)) + n.label());
-                controls.setAdapter(
-                    new android.widget.ArrayAdapter<>(
-                        ui, android.R.layout.simple_list_item_multiple_choice, labels));
-                for (int i = 0; i < nodes.size(); i++)
-                  if (prior.contains(nodes.get(i).path)) {
-                    controls.setItemChecked(i, true);
-                    selected.add(nodes.get(i));
-                  }
-                controls.setOnItemClickListener(
-                    (parent, view, index, id) -> {
-                      TreeNode n = nodes.get(index);
-                      if (controls.isItemChecked(index)) selected.add(n);
-                      else selected.remove(n);
-                    });
-                root.addView(controls, new LinearLayout.LayoutParams(-1, 0, 1));
-                Ui.button(
-                    root,
-                    ToolApp.t("应用选择", "Apply selection"),
-                    () -> {
-                      capture.rules(selected, ignored);
-                      closePanel();
-                    });
-                Ui.button(
-                    root,
-                    ignored
-                        ? ToolApp.t("改选截图控件", "Choose capture controls")
-                        : ToolApp.t("选择忽略控件", "Choose ignored controls"),
-                    () -> {
-                      capture.rules(selected, ignored);
-                      chooseTree(!ignored);
-                    });
-                showPanel(root);
-              });
-        });
+    closeFrozen();
+    frozen = new FrozenCapture(this, ui, capture, ignored);
+    frozen.capture();
   }
 
   private void findDialog() {

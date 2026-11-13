@@ -180,15 +180,22 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "release/GAndroidTools-$VERSION_NAME.apk"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "release/GAndroidTools-$VERSION_NAME.apk" > release/signature.txt
           python3 scripts/verify_certificate.py release/signature.txt signing-certificate.sha256
+          python3 scripts/publish_update.py "release/GAndroidTools-$VERSION_NAME.apk" release/update.json
           (cd release && sha256sum ./*.apk > SHA256SUMS)
           flags=()
           if [ "$STABLE" != true ]; then flags+=(--prerelease); fi
           gh release create "$RELEASE_TAG" release/* --target "$GITHUB_SHA" --title "GAndroidTools $VERSION_NAME" --generate-notes "${flags[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-update
+          path: |
+            release/*.apk
+            release/update.json
       - name: Remove signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks"
   pages:
-    needs: [android, docs, secrets, device]
+    needs: [android, docs, secrets, device, release]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-24.04
     permissions:
@@ -198,6 +205,25 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: wiki-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-update
+          path: update-artifact
+      - name: Combine wiki and verified update
+        run: |
+          mkdir -p public/downloads
+          tar -xf wiki-artifact/artifact.tar -C public
+          cp update-artifact/* public/downloads/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          name: github-pages-complete
+          path: public
       - uses: actions/configure-pages@v5
       - uses: actions/deploy-pages@v4
         id: deployment
+        with:
+          artifact_name: github-pages-complete
