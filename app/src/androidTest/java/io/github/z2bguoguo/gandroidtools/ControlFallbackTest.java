@@ -51,9 +51,8 @@ public class ControlFallbackTest {
     try {
       shell(
           automation,
-          "settings --user current put secure enabled_accessibility_services '"
-              + (previous.isEmpty() ? component : previous + ":" + component)
-              + "'");
+          "settings --user current put secure enabled_accessibility_services "
+              + (previous.isEmpty() ? component : previous + ":" + component));
       shell(automation, "settings --user current put secure accessibility_enabled 1");
       long deadline = android.os.SystemClock.elapsedRealtime() + 6000;
       while (InputService.instance == null && android.os.SystemClock.elapsedRealtime() < deadline)
@@ -104,7 +103,9 @@ public class ControlFallbackTest {
           throw new AssertionError("Invalid final service settings");
         shell(
             automation,
-            "settings --user current put secure enabled_accessibility_services '" + retained + "'");
+            retained.isEmpty()
+                ? "settings --user current delete secure enabled_accessibility_services"
+                : "settings --user current put secure enabled_accessibility_services " + retained);
         if (retained.isEmpty())
           shell(automation, "settings --user current put secure accessibility_enabled 0");
       }

@@ -133,11 +133,20 @@ public class ControlEditorTest {
         shot.compress(Bitmap.CompressFormat.PNG, 100, output);
       }
       shot.recycle();
+      try (android.os.ParcelFileDescriptor mkdir =
+              InstrumentationRegistry.getInstrumentation()
+                  .getUiAutomation()
+                  .executeShellCommand("mkdir -p /sdcard/Download/gandroidtools-ui-previews");
+          android.os.ParcelFileDescriptor.AutoCloseInputStream input =
+              new android.os.ParcelFileDescriptor.AutoCloseInputStream(mkdir)) {
+        byte[] buffer = new byte[1024];
+        while (input.read(buffer) != -1) {}
+      }
       try (android.os.ParcelFileDescriptor fd =
               InstrumentationRegistry.getInstrumentation()
                   .getUiAutomation()
                   .executeShellCommand(
-                      "mkdir -p /sdcard/Download/gandroidtools-ui-previews; cp "
+                      "cp "
                           + target
                           + " /sdcard/Download/gandroidtools-ui-previews/control-nearby-tree.png");
           android.os.ParcelFileDescriptor.AutoCloseInputStream input =
