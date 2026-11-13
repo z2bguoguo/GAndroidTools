@@ -205,6 +205,18 @@ public final class Bridge {
     return call(action, new JSONObject());
   }
 
+  public record FrozenFrame(JSONObject metadata, Bitmap image) {}
+
+  private final Object captureLock = new Object();
+
+  /** Keep the metadata ID and image transfer together when screenshot tools run concurrently. */
+  public FrozenFrame freeze(boolean allWindows) throws Exception {
+    synchronized (captureLock) {
+      JSONObject metadata = call("freeze", new JSONObject().put("allWindows", allWindows));
+      return new FrozenFrame(metadata, screenshot(-metadata.getInt("captureId")));
+    }
+  }
+
   public Bitmap screenshot(int display) throws Exception {
     IRemoteTools service = remote;
     if (service == null) throw new IllegalStateException("Shizuku disconnected");

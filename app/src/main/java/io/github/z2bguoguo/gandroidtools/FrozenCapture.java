@@ -85,10 +85,9 @@ public final class FrozenCapture {
           try {
             overlay.hideForCapture(true);
             Thread.sleep(150);
-            JSONObject frozen =
-                ToolApp.app.bridge.call(
-                    "freeze", new JSONObject().put("allWindows", rulesTarget == null));
-            shot = ToolApp.app.bridge.screenshot(-frozen.getInt("captureId"));
+            Bridge.FrozenFrame frame = ToolApp.app.bridge.freeze(rulesTarget == null);
+            JSONObject frozen = frame.metadata();
+            shot = frame.image();
             JSONObject tree =
                 new JSONObject()
                     .put("nodes", frozen.getJSONArray("nodes"))

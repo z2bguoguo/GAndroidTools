@@ -169,8 +169,9 @@ public final class CaptureSession {
     LayerSnapshot layerSnapshot = null;
     try {
       pause(150);
-      JSONObject tree = app.bridge.call("freeze");
-      raw = app.bridge.screenshot(-tree.getInt("captureId"));
+      Bridge.FrozenFrame frameData = app.bridge.freeze(false);
+      JSONObject tree = frameData.metadata();
+      raw = frameData.image();
       if (app.config.flag("layerClean", true)) {
         layerSnapshot = LayerSnapshot.capture(tree);
         tree.put("windowLayers", layerSnapshot.metadata());
@@ -384,8 +385,9 @@ public final class CaptureSession {
           LayerSnapshot layers = null;
           try {
             Thread.sleep(150);
-            JSONObject tree = app.bridge.call("freeze", new JSONObject().put("allWindows", true));
-            image = app.bridge.screenshot(-tree.getInt("captureId"));
+            Bridge.FrozenFrame frameData = app.bridge.freeze(true);
+            JSONObject tree = frameData.metadata();
+            image = frameData.image();
             layers = LayerSnapshot.capture(tree);
             File file = Exports.file("page-" + System.currentTimeMillis() + ".gatpage");
             PageArchive.write(file, image, tree, layers, List.of());
