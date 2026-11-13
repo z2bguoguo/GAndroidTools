@@ -170,6 +170,26 @@ public final class SettingsUi {
       }
       case "capture" -> {
         LinearLayout card = Ui.card(root);
+        for (String key :
+            List.of(
+                "layerPack",
+                "windowLayerPixels",
+                "autoFixed",
+                "historyRepair",
+                "layerClean",
+                "longArchive")) {
+          String label =
+              switch (key) {
+                case "layerPack" -> ToolApp.t("普通截图同时保存图层包", "Save layered pack with screenshots");
+                case "windowLayerPixels" ->
+                    ToolApp.t("尝试独立窗口图像", "Capture independent window images");
+                case "autoFixed" -> ToolApp.t("自动去重固定部分", "Deduplicate fixed regions");
+                case "historyRepair" -> ToolApp.t("使用历史帧补全遮挡", "Repair occlusions from history");
+                case "layerClean" -> ToolApp.t("使用窗口图层清理浮窗", "Clean overlays using window layers");
+                default -> ToolApp.t("保留长截图历史图层包", "Keep long capture history pack");
+              };
+          toggle(card, key, label, config.flag(key, true), value -> config.set(key, value));
+        }
         toggle(
             card,
             "saveGallery",
@@ -224,6 +244,11 @@ public final class SettingsUi {
             root,
             List.of(
                 "screenshotDelay",
+                "windowLayers",
+                "controlLayers",
+                "layerMemoryMb",
+                "historyFrames",
+                "captureDiskMb",
                 "settle",
                 "duration",
                 "overlap",

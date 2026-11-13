@@ -3,7 +3,6 @@
 package io.github.z2bguoguo.gandroidtools;
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
@@ -16,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 public final class CaptureSession {
@@ -30,6 +30,8 @@ public final class CaptureSession {
   private File directory;
   private JSONObject firstTree;
   private boolean transparencyUsed;
+  private File historyArchive;
+  private long cacheBytes;
 
   public CaptureSession(OverlayService overlay) {
     this.overlay = overlay;
@@ -65,6 +67,8 @@ public final class CaptureSession {
             frames.clear();
             firstTree = null;
             transparencyUsed = false;
+            historyArchive = null;
+            cacheBytes = 0;
             Ui.toast(app, ToolApp.t("截图会话已启动，使用工具栏采集", "Capture session started; use the toolbar"));
           } catch (Exception e) {
             active.set(false);
@@ -131,26 +135,29 @@ public final class CaptureSession {
             "capture.scroll",
             "Control scroll unavailable; using a screen gesture: " + ErrorDetails.message(error));
       }
-    if (mode.equals("page"))
-      for (TreeNode n : nodes)
-        if (n.scrollable
-            && app.bridge
-                .call("node", new JSONObject().put("key", n.key).put("operation", "scroll"))
-                .optBoolean("performed")) return;
     android.util.DisplayMetrics dm = app.getResources().getDisplayMetrics();
-    int start = dm.heightPixels * 4 / 5;
-    int end =
+    Rect area = new Rect(0, 0, dm.widthPixels, dm.heightPixels);
+    long best = 0;
+    for (TreeNode node : nodes)
+      if (node.scrollable && (long) node.bounds.width() * node.bounds.height() > best) {
+        area.set(node.bounds);
+        best = (long) node.bounds.width() * node.bounds.height();
+      }
+    int margin = Math.max(4, area.height() / 20);
+    int start = area.bottom - margin;
+    int distance =
         mode.equals("smooth")
-            ? dm.heightPixels * 2 / 5
-            : dm.heightPixels * (app.config.number("overlap")) / 100;
+            ? area.height() * 2 / 5
+            : area.height() * (100 - app.config.number("overlap")) / 100;
+    int end = Math.max(area.top + margin, start - distance);
     app.bridge.call(
         "swipe",
         new JSONObject()
-            .put("x1", dm.widthPixels / 2)
+            .put("x1", area.centerX())
             .put("y1", start)
-            .put("x2", dm.widthPixels / 2)
+            .put("x2", area.centerX())
             .put("y2", end)
-            .put("duration", mode.equals("smooth") ? app.config.number("duration") : 100));
+            .put("duration", Math.max(350, app.config.number("duration"))));
   }
 
   private int[] capture() throws Exception {
@@ -159,10 +166,28 @@ public final class CaptureSession {
       throw new IllegalStateException("Frame limit reached");
     overlay.hideForCapture(true);
     Bitmap raw = null, bitmap = null;
+    LayerSnapshot layerSnapshot = null;
     try {
       pause(150);
       JSONObject tree = app.bridge.call("freeze");
       raw = app.bridge.screenshot(-tree.getInt("captureId"));
+      if (app.config.flag("layerClean", true)) {
+        layerSnapshot = LayerSnapshot.capture(tree);
+        tree.put("windowLayers", layerSnapshot.metadata());
+        String targetPackage = "";
+        for (TreeNode node : TreeNode.parse(tree))
+          if (!node.packageName.isBlank()) {
+            targetPackage = node.packageName;
+            break;
+          }
+        Bitmap cleaned = layerSnapshot.cleanApplication(raw, targetPackage);
+        tree.put("windowPixelsUsed", cleaned != null);
+        if (cleaned != null) {
+          raw.recycle();
+          raw = cleaned;
+        }
+      }
+
       if (!tree.optBoolean("treeAvailable", true)) {
         synchronized (this) {
           if (!include.isEmpty() || !exclude.isEmpty())
@@ -205,6 +230,8 @@ public final class CaptureSession {
       android.graphics.Paint paint = new android.graphics.Paint();
       paint.setXfermode(
           new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR));
+      JSONArray excludedBounds = new JSONArray();
+      List<TreeNode> excludedNodes = new ArrayList<>();
       synchronized (this) {
         if (!exclude.isEmpty()) transparencyUsed = true;
         for (TreeNode rule : exclude)
@@ -213,6 +240,8 @@ public final class CaptureSession {
               Rect r = new Rect(n.bounds);
               r.offset(-region.left, -region.top);
               canvas.drawRect(r, paint);
+              excludedBounds.put(LayerSnapshot.box(r));
+              excludedNodes.add(n);
             }
       }
       File frame = new File(directory, "frame-" + frames.size() + ".png");
@@ -220,6 +249,20 @@ public final class CaptureSession {
         if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out))
           throw new IllegalStateException("Frame encoding failed");
       }
+      JSONObject safe = PageArchive.sanitize(tree, excludedNodes);
+      safe.put("region", LayerSnapshot.box(region)).put("excludedBounds", excludedBounds);
+      File metadataFile = new File(directory, frame.getName() + ".json");
+      try (java.io.FileWriter writer = new java.io.FileWriter(metadataFile)) {
+        writer.write(safe.toString());
+      }
+      long amount = frame.length() + metadataFile.length();
+      if (cacheBytes + amount > app.config.number("captureDiskMb") * 1024L * 1024) {
+        frame.delete();
+        metadataFile.delete();
+        throw new IllegalStateException(
+            "Capture disk budget reached; export the existing frames before continuing");
+      }
+      cacheBytes += amount;
       frames.add(frame);
       int[] pixels = new int[bitmap.getWidth() * bitmap.getHeight()];
       bitmap.getPixels(pixels, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
@@ -229,6 +272,7 @@ public final class CaptureSession {
           "Frame " + frames.size() + " · " + bitmap.getWidth() + " × " + bitmap.getHeight());
       return pixels;
     } finally {
+      if (layerSnapshot != null) layerSnapshot.close();
       if (raw != null) raw.recycle();
       if (bitmap != null) bitmap.recycle();
       overlay.hideForCapture(false);
@@ -278,7 +322,9 @@ public final class CaptureSession {
                         + ToolApp.t(" 张。", " image(s).")
                     : ToolApp.t(
                         "截图已导出，可在首页导出文件中分享", "Capture exported; share from Home → Exports"));
-            app.main.post(() -> overlay.showFiles(files));
+            List<File> shared = new ArrayList<>(files);
+            if (historyArchive != null) shared.add(historyArchive);
+            app.main.post(() -> overlay.showFiles(shared));
           } catch (Exception e) {
             fail(e);
           } finally {
@@ -309,127 +355,47 @@ public final class CaptureSession {
   }
 
   private List<File> stitch() throws Exception {
-    List<File> out = new ArrayList<>();
-    Bitmap first = BitmapFactory.decodeFile(frames.get(0).toString());
-    if (first == null) throw new IllegalStateException("Cannot decode frame");
-    int width = first.getWidth(), height = first.getHeight();
-    int cap =
-        Math.min(
-            app.config.number("maxHeight"),
-            Math.max(height, (int) (48L * 1024 * 1024 / 4 / width)));
-    Bitmap sheet = Bitmap.createBitmap(width, cap, Bitmap.Config.ARGB_8888);
-    Canvas canvas = new Canvas(sheet);
-    android.graphics.Paint replace = new android.graphics.Paint();
-    replace.setXfermode(
-        new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC));
-    int filled = 0;
-    int[] previous = null;
-    try {
-      for (File f : frames) {
-        Bitmap b = f.equals(frames.get(0)) ? first : BitmapFactory.decodeFile(f.toString());
-        if (b == null) throw new IllegalStateException("Cannot decode frame");
-        try {
-          if (b.getWidth() != width || b.getHeight() != height)
-            throw new IllegalStateException("Screen size changed; start a new session");
-          int[] pixels = new int[width * height];
-          b.getPixels(pixels, 0, width, 0, 0, width, height);
-          int overlap = previous == null ? 0 : OverlapMatcher.find(width, height, previous, pixels);
-          if (previous != null && OverlapMatcher.same(previous, pixels)) continue;
-          if (overlap < 0) {
-            if (filled > 0) {
-              out.add(saveSheet(sheet, filled, out.size()));
-              filled = 0;
-            }
-            overlap = 0;
-            app.log.add("WARN", "capture", "No reliable overlap; starting a separate image");
-          }
-          int source = overlap;
-          while (source < height) {
-            int amount = Math.min(height - source, cap - filled);
-            canvas.drawBitmap(
-                b,
-                new Rect(0, source, width, source + amount),
-                new Rect(0, filled, width, filled + amount),
-                replace);
-            filled += amount;
-            source += amount;
-            if (filled == cap) {
-              out.add(saveSheet(sheet, filled, out.size()));
-              filled = 0;
-            }
-          }
-          previous = pixels;
-        } finally {
-          b.recycle();
-        }
-      }
-      if (filled > 0) out.add(saveSheet(sheet, filled, out.size()));
-      return out;
-    } finally {
-      sheet.recycle();
-      if (!first.isRecycled()) first.recycle();
-    }
-  }
-
-  private File saveSheet(Bitmap sheet, int height, int index) throws Exception {
-    Bitmap b = Bitmap.createBitmap(sheet, 0, 0, sheet.getWidth(), height);
-    boolean jpeg;
-    synchronized (this) {
-      jpeg = app.config.flag("jpeg", false) && !transparencyUsed;
-    }
-    if (app.config.flag("jpeg", false) && !jpeg)
-      app.log.add("INFO", "capture.format", "PNG retained for transparent control masks");
-    File f =
-        Exports.file("long-" + System.currentTimeMillis() + "-" + index + (jpeg ? ".jpg" : ".png"));
-    try (FileOutputStream stream = new FileOutputStream(f)) {
-      if (!b.compress(
-          jpeg ? Bitmap.CompressFormat.JPEG : Bitmap.CompressFormat.PNG,
-          app.config.number("jpegQuality"),
-          stream)) throw new IllegalStateException("Image export failed");
-    } finally {
-      if (b != sheet) b.recycle();
-    }
-    return f;
+    LongComposer.Result result =
+        new LongComposer(app.config, () -> cancelled, transparencyUsed).compose(frames);
+    historyArchive = result.history();
+    app.log.add(
+        "INFO",
+        "capture.compose",
+        "Images="
+            + result.images().size()
+            + " · repaired="
+            + result.repaired()
+            + " · unobserved="
+            + result.unknown());
+    if (result.unknown() > 0)
+      Ui.toast(
+          app,
+          ToolApp.t(
+              "部分遮挡未在其他帧出现，保留为透明",
+              "Some occluded pixels were never observed and remain transparent"));
+    return result.images();
   }
 
   public void snapshot() {
     app.worker.execute(
         () -> {
           overlay.hideForCapture(true);
-          Bitmap b = null;
+          Bitmap image = null;
+          LayerSnapshot layers = null;
           try {
             Thread.sleep(150);
-            JSONObject tree =
-                app.bridge.call(
-                    "tree",
-                    new JSONObject().put("allWindows", app.config.flag("allWindows", false)));
-            b = app.bridge.screenshot(0);
+            JSONObject tree = app.bridge.call("freeze", new JSONObject().put("allWindows", true));
+            image = app.bridge.screenshot(-tree.getInt("captureId"));
+            layers = LayerSnapshot.capture(tree);
             File file = Exports.file("page-" + System.currentTimeMillis() + ".gatpage");
-            try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(file))) {
-              textEntry(
-                  out,
-                  "manifest.json",
-                  new JSONObject()
-                      .put("format", "gandroidtools.page")
-                      .put("version", 1)
-                      .put("created", java.time.Instant.now().toString())
-                      .put("screenWidth", b.getWidth())
-                      .put("screenHeight", b.getHeight())
-                      .put("image", "screen.png")
-                      .put("controls", "controls.json")
-                      .put("passwordTextExcluded", true)
-                      .toString(2));
-              textEntry(out, "controls.json", tree.toString(2));
-              out.putNextEntry(new ZipEntry("screen.png"));
-              b.compress(Bitmap.CompressFormat.PNG, 100, out);
-              out.closeEntry();
-            }
-            app.log.add("INFO", "snapshot", "Page archive saved");
+            PageArchive.write(file, image, tree, layers, List.of());
+            app.log.add("INFO", "snapshot", "Layered page archive saved");
             app.main.post(() -> overlay.showFiles(List.of(file)));
-          } catch (Exception e) {
-            fail(e);
+          } catch (Exception error) {
+            fail(error);
           } finally {
-            if (b != null) b.recycle();
+            if (layers != null) layers.close();
+            if (image != null) image.recycle();
             overlay.hideForCapture(false);
           }
         });

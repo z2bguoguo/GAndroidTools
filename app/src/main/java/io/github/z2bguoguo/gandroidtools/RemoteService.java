@@ -218,7 +218,10 @@ public final class RemoteService extends IRemoteTools.Stub {
         case "freeze" -> {
           if (frozenBitmap != null) frozenBitmap.recycle();
           frozenBitmap = null;
+          long captureStarted = android.os.SystemClock.elapsedRealtimeNanos();
           frozenBitmap = captureScreen();
+          result.put("captureStartedElapsedNs", captureStarted);
+          result.put("captureCompletedElapsedNs", android.os.SystemClock.elapsedRealtimeNanos());
           if (frozenBitmap == null) throw new IllegalStateException("Screenshot unavailable");
           frozenId = frozenId == Integer.MAX_VALUE ? 1 : frozenId + 1;
           result.put("captureId", frozenId);
@@ -228,7 +231,7 @@ public final class RemoteService extends IRemoteTools.Stub {
           result.put("controlBackend", "UiAutomation");
           try {
             requireAutomation();
-            result.put("nodes", dump(false));
+            result.put("nodes", dump(p.optBoolean("allWindows", false)));
             result.put("treeAvailable", true);
           } catch (Exception error) {
             controls.clear();

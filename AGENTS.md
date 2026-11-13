@@ -15,6 +15,8 @@ Native Android toolbox. Java 17, minSdk 26, compile/target SDK 35. Work only in 
 - CallIdentity: clear/restore incoming Binder identity at every Shizuku entry point before local privileged calls.
 - OverlayService, Actions, Ui: floating gestures, docking, capture toolbar and reusable native cards.
 - FrozenCapture, DelayWheel: image-first frozen screenshot editor and secondary delay wheel. Preserve metadata in memory; never include an unmasked original in an edited export.
+- LayerSnapshot, PageArchive: bounded optional API-34 window buffers, honest timing/capability metadata, sanitized version-2 page packs. Never label a composite crop as an independent surface; omit a window buffer if a hidden-control mask cannot be mapped safely.
+- ScrollAnalysis, LongComposer: disk-backed two-pass alignment, fixed-edge deduplication, real-pixel history repair and sanitized .gatlong archives. Never invent unseen pixels or stitch ambiguous motion; keep headers once at group start and footers once at group end.
 - CaptureSession, OverlapMatcher, Exports: disk-spooled capture, region masks, overlap matching, split exports, .gatpage archives.
 - MacroEngine, InputService: Rhino host API, explicit accessible control recording and deferred input.
 - InfoStore, InfoUi, AuthActivity, Totp: indexed nested notebook, authenticated AES-GCM and TOTP.

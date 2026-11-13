@@ -57,3 +57,11 @@ Long capture lets you switch between include and exclude rules, preview either s
 ## Updates
 
 Home → Check for updates performs a manual check. Settings → Language and appearance controls automatic checking and the interval in hours (default 24). Checks run when the app opens, not as a persistent background service. Downloads require confirmation and show progress with cancellation. The app verifies SHA-256, size, package, increasing version and the original signing certificate. Android handles the installation permission and confirmation. No GitHub token is embedded.
+
+## Frozen layers and scroll history
+
+A normal Save image also writes a `.gatpage` by default. It retains the frozen composite, bounded control tree, available independent window buffers, and small control crops under pixel/count limits. Window buffers require Android 14+ and the enabled accessibility control bridge; secure or unavailable windows are marked, not bypassed. Composite crops are explicitly labeled and cannot reveal content hidden inside the same window. Callbacks are sequential/asynchronous, not one atomic compositor frame; the pack records capture timing.
+
+Long capture can prefer an aligned application-window buffer to avoid separate overlay windows. Scrolling then measures body motion while ignoring fixed edges. Each confidently aligned group keeps the header once at its beginning and the footer once at its end. Stationary controls inside the body are masked and, when possible, filled using actual unmasked pixels from other frames at the same document coordinate. Unobserved pixels stay transparent. Ambiguous motion starts another image group rather than removing guessed rows. Manual top/bottom crops and ignored controls remain available.
+
+The optional `.gatlong` archive retains processed frames, sanitized control/window metadata, measured offsets, fixed bounds and repair counts. It contains neither unmasked original frames nor separate raw window buffers. History uses a bounded number of donor frames; capture also has a configurable disk limit. Advanced options are in Settings → Capture and gallery.

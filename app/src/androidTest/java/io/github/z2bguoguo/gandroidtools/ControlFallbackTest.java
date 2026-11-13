@@ -12,6 +12,7 @@ import android.os.ParcelFileDescriptor;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.platform.app.InstrumentationRegistry;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -71,6 +72,42 @@ public class ControlFallbackTest {
         }
         assertFalse("Fixture field missing", fieldKey.isEmpty());
         assertEquals("accessibility", tree.getString("controlBackend"));
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        try (LayerSnapshot layers = LayerSnapshot.capture(tree)) {
+          assertFalse(layers.windows.isEmpty());
+          if (android.os.Build.VERSION.SDK_INT >= 34)
+            assertTrue(
+                "Independent window screenshot missing: " + layers.metadata(),
+                layers.pixelCount() > 0);
+          else assertEquals(0, layers.pixelCount());
+          TreeNode hidden =
+              TreeNode.parse(tree).stream()
+                  .filter(n -> n.id.equals("android:id/edit"))
+                  .findFirst()
+                  .orElseThrow();
+          if (android.os.Build.VERSION.SDK_INT >= 34) {
+            assertTrue(
+                "Application window buffer missing: " + layers.metadata(),
+                layers.windows.stream().anyMatch(w -> w.id == hidden.windowId && w.image != null));
+          }
+          verifyMaskedArchive(automation, tree, layers, hidden);
+          android.graphics.Bitmap composite =
+              android.graphics.Bitmap.createBitmap(
+                  96, 180, android.graphics.Bitmap.Config.ARGB_8888);
+          composite.eraseColor(android.graphics.Color.BLUE);
+          File page = Exports.file("layer-test-" + System.nanoTime() + ".gatpage");
+          try {
+            PageArchive.write(page, composite, tree, layers, List.of());
+            try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(page)) {
+              assertNotNull(zip.getEntry("layers.json"));
+              assertNotNull(zip.getEntry("controls.json"));
+            }
+          } finally {
+            composite.recycle();
+            page.delete();
+          }
+        }
+
         assertFalse(tree.toString().contains("excluded-password-fixture"));
         assertTrue(fieldKey.startsWith("access:"));
         assertTrue(
@@ -109,6 +146,64 @@ public class ControlFallbackTest {
         if (retained.isEmpty())
           shell(automation, "settings --user current put secure accessibility_enabled 0");
       }
+    }
+  }
+
+  private void verifyMaskedArchive(
+      UiAutomation automation, JSONObject tree, LayerSnapshot layers, TreeNode hidden)
+      throws Exception {
+    Bitmap screen = automation.takeScreenshot();
+    assertNotNull(screen);
+    Bitmap edited =
+        Bitmap.createBitmap(screen.getWidth(), screen.getHeight(), Bitmap.Config.ARGB_8888);
+    ControlPreview.drawImage(new Canvas(edited), screen, List.of(hidden), i -> false);
+    File page = Exports.file("masked-layers-" + System.nanoTime() + ".gatpage");
+    try {
+      PageArchive.write(page, edited, tree, layers, List.of(hidden));
+      try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(page)) {
+        JSONObject controls = new JSONObject(zipText(zip, "controls.json"));
+        for (TreeNode node : TreeNode.parse(controls))
+          if (node.id.equals(hidden.id)) assertEquals("", node.text);
+        JSONArray descriptors = new JSONObject(zipText(zip, "layers.json")).getJSONArray("layers");
+        for (int i = 0; i < descriptors.length(); i++) {
+          JSONObject descriptor = descriptors.getJSONObject(i);
+          if (!descriptor.optString("kind").equals("window-surface")
+              || descriptor.optInt("windowId", -2) != hidden.windowId) continue;
+          if (!descriptor.has("file")) continue;
+          try (java.io.InputStream input =
+              zip.getInputStream(zip.getEntry(descriptor.getString("file")))) {
+            Bitmap image = android.graphics.BitmapFactory.decodeStream(input);
+            assertNotNull(image);
+            try {
+              JSONArray bounds = descriptor.getJSONArray("bounds");
+              int x = hidden.bounds.centerX() - bounds.getInt(0),
+                  y = hidden.bounds.centerY() - bounds.getInt(1);
+              assertTrue(x >= 0 && y >= 0 && x < image.getWidth() && y < image.getHeight());
+              assertEquals(
+                  "Hidden control leaked through a window buffer",
+                  0,
+                  Color.alpha(image.getPixel(x, y)));
+            } finally {
+              image.recycle();
+            }
+          }
+        }
+        assertNull(zip.getEntry("original.png"));
+      }
+    } finally {
+      screen.recycle();
+      edited.recycle();
+      page.delete();
+    }
+  }
+
+  private String zipText(java.util.zip.ZipFile zip, String path) throws Exception {
+    try (java.io.InputStream input = zip.getInputStream(zip.getEntry(path));
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+      byte[] buffer = new byte[4096];
+      int n;
+      while ((n = input.read(buffer)) != -1) bytes.write(buffer, 0, n);
+      return bytes.toString("UTF-8");
     }
   }
 

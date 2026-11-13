@@ -32,6 +32,7 @@
 
 - Rounded cards in mint and mist blue, with Chinese and English interfaces.
 - Single and long captures share expandable control trees, readable control types and nearby multi-selection on hold; hidden regions export with PNG alpha.
+- Layered page packs retain window buffers, controls and labeled crops; long captures deduplicate fixed bars and repair overlays from real aligned frames.
 - An inward-facing semicircle supports hold-and-drag direction selection, tap-then-drag movement, docking and a custom double tap.
 - Assign five action balls and the center double tap visually. Eight settings categories include detailed bilingual help and examples.
 - Private snippets and MFA secrets use Android Keystore encryption with strong biometric verification for each access.

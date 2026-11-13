@@ -7,13 +7,10 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -22,6 +19,7 @@ public final class FrozenCapture {
   private final OverlayService overlay;
   private final android.content.Context context;
   private Bitmap original;
+  private LayerSnapshot layers;
   private JSONObject metadata;
   private List<TreeNode> nodes = List.of();
   private VisibilityState selection;
@@ -32,6 +30,7 @@ public final class FrozenCapture {
   private final Paint mask = new Paint();
   private final Paint stroke = new Paint(3);
   private final AtomicBoolean busy = new AtomicBoolean();
+  private static final AtomicBoolean exporting = new AtomicBoolean();
   private boolean disposed;
 
   public FrozenCapture(OverlayService overlay, android.content.Context context) {
@@ -82,10 +81,13 @@ public final class FrozenCapture {
     ToolApp.app.worker.execute(
         () -> {
           Bitmap shot = null;
+          LayerSnapshot capturedLayers = null;
           try {
             overlay.hideForCapture(true);
             Thread.sleep(150);
-            JSONObject frozen = ToolApp.app.bridge.call("freeze");
+            JSONObject frozen =
+                ToolApp.app.bridge.call(
+                    "freeze", new JSONObject().put("allWindows", rulesTarget == null));
             shot = ToolApp.app.bridge.screenshot(-frozen.getInt("captureId"));
             JSONObject tree =
                 new JSONObject()
@@ -107,16 +109,22 @@ public final class FrozenCapture {
                       "截图已保留；控件树暂不可用，详情见日志",
                       "Screenshot retained; controls unavailable. See logs."));
             }
+            if (rulesTarget == null) capturedLayers = LayerSnapshot.capture(frozen);
+            LayerSnapshot retainedLayers = capturedLayers;
+            capturedLayers = null;
             Bitmap result = shot;
             shot = null;
             ToolApp.app.main.post(
                 () -> {
                   if (disposed) {
                     result.recycle();
+                    if (retainedLayers != null) retainedLayers.close();
                     return;
                   }
                   if (original != null) original.recycle();
                   original = result;
+                  if (layers != null) layers.close();
+                  layers = retainedLayers;
                   metadata = tree;
                   nodes = TreeNode.parse(tree);
                   selection =
@@ -132,6 +140,7 @@ public final class FrozenCapture {
             Ui.toast(context, e.getMessage());
           } finally {
             if (shot != null) shot.recycle();
+            if (capturedLayers != null) capturedLayers.close();
             overlay.hideForCapture(false);
             busy.set(false);
           }
@@ -151,6 +160,26 @@ public final class FrozenCapture {
             17,
             Ui.INK);
     root.addView(title);
+    if (layers != null)
+      root.addView(
+          Ui.body(
+              context,
+              ToolApp.t("已冻结窗口图像：", "Frozen window images: ")
+                  + layers.pixelCount()
+                  + ToolApp.t(
+                      " · 控件树和可用图层随图层包保存；不同回调可能不是同一帧。",
+                      " · Tree and available layers are retained in the page pack; callbacks may"
+                          + " represent different frames.")));
+
+    if (layers != null && layers.pixelCount() == 0)
+      root.addView(
+          Ui.body(
+              context,
+              ToolApp.t(
+                  "独立窗口图像需要 Android 14+ 和首页控件兼容通道；不可用时仍保存控件树、片段及图层状态。",
+                  "Independent window images require Android 14+ and the control fallback on Home."
+                      + " Trees, crops and layer status are retained when window pixels are"
+                      + " unavailable.")));
     if (!metadata.optBoolean("treeAvailable", true)) {
       root.addView(
           Ui.body(
@@ -214,7 +243,12 @@ public final class FrozenCapture {
       return;
     }
     LinearLayout save = Ui.row(context);
-    Ui.button(save, ToolApp.t("保存截图", "Save image"), () -> save(false));
+    Ui.button(
+        save,
+        ToolApp.app.config.flag("layerPack", true)
+            ? ToolApp.t("保存截图与图层包", "Save image and layers")
+            : ToolApp.t("保存截图", "Save image"),
+        () -> save(false));
     Ui.button(save, ToolApp.t("保存页面包", "Save page archive"), () -> save(true));
     root.addView(save);
     Ui.button(root, ToolApp.t("关闭并释放快照", "Close and release snapshot"), overlay::closeFrozen);
@@ -261,71 +295,59 @@ public final class FrozenCapture {
   }
 
   private void save(boolean archive) {
-    if (original == null || !busy.compareAndSet(false, true)) return;
+    if (original == null || busy.get()) return;
+    if (!exporting.compareAndSet(false, true)) {
+      Ui.toast(context, ToolApp.t("另一张截图正在导出，请稍候", "Another screenshot is exporting; please wait"));
+      return;
+    }
+    if (!busy.compareAndSet(false, true)) {
+      exporting.set(false);
+      return;
+    }
     Bitmap image =
         Bitmap.createBitmap(original.getWidth(), original.getHeight(), Bitmap.Config.ARGB_8888);
     paint(new Canvas(image), original);
     JSONObject tree;
+    List<TreeNode> hidden = new ArrayList<>();
+    LayerSnapshot retained = layers == null ? null : layers.retain();
     try {
       tree = new JSONObject(metadata.toString());
       JSONArray entries = tree.getJSONArray("nodes");
       for (int i = 0; i < entries.length(); i++) {
-        JSONObject n = entries.getJSONObject(i);
-        n.put("visible", selection.visible(i));
-        if (!selection.visible(i)) n.put("text", "").put("description", "");
+        entries.getJSONObject(i).put("visible", selection.visible(i));
+        if (!selection.visible(i)) hidden.add(nodes.get(i));
       }
-    } catch (Exception e) {
+    } catch (Exception error) {
+      if (retained != null) retained.close();
       image.recycle();
       busy.set(false);
+      exporting.set(false);
       return;
     }
     ToolApp.app.worker.execute(
         () -> {
           try {
-            File file =
-                Exports.file(
-                    "screenshot-" + System.currentTimeMillis() + (archive ? ".gatpage" : ".png"));
-            if (archive) {
-              try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(file))) {
-                text(
-                    zip,
-                    "manifest.json",
-                    new JSONObject()
-                        .put("format", "gandroidtools.page")
-                        .put("version", 1)
-                        .put("image", "screen.png")
-                        .put("controls", "controls.json")
-                        .put("edited", true)
-                        .put("capturedAt", tree.optString("capturedAt"))
-                        .put("screenWidth", image.getWidth())
-                        .put("screenHeight", image.getHeight())
-                        .toString(2));
-                text(zip, "controls.json", tree.toString(2));
-                zip.putNextEntry(new ZipEntry("screen.png"));
-                image.compress(Bitmap.CompressFormat.PNG, 100, zip);
-                zip.closeEntry();
+            String name = "screenshot-" + System.currentTimeMillis();
+            if (!archive)
+              try (FileOutputStream out = new FileOutputStream(Exports.file(name + ".png"))) {
+                if (!image.compress(Bitmap.CompressFormat.PNG, 100, out))
+                  throw new IllegalStateException("Cannot encode screenshot");
               }
-            } else
-              try (FileOutputStream out = new FileOutputStream(file)) {
-                image.compress(Bitmap.CompressFormat.PNG, 100, out);
-              }
-            ToolApp.app.log.add("INFO", "screenshot", "Edited frozen screenshot exported");
-            ToolApp.app.main.post(
-                () -> Ui.toast(context, ToolApp.t("已保存到首页的导出文件", "Saved to Home → Exports")));
-          } catch (Exception e) {
-            ToolApp.app.log.error("screenshot.export", e);
-            Ui.toast(context, e.getMessage());
+            if (archive || ToolApp.app.config.flag("layerPack", true))
+              PageArchive.write(Exports.file(name + ".gatpage"), image, tree, retained, hidden);
+            ToolApp.app.log.add(
+                "INFO", "screenshot", "Edited screenshot and requested layer archive exported");
+            Ui.toast(context, ToolApp.t("已保存，可在首页导出文件中分享", "Saved; share from Home → Exports"));
+          } catch (Exception error) {
+            ToolApp.app.log.error("screenshot.export", error);
+            Ui.toast(context, error.getMessage());
           } finally {
+            if (retained != null) retained.close();
             image.recycle();
             busy.set(false);
+            exporting.set(false);
           }
         });
-  }
-
-  private static void text(ZipOutputStream zip, String name, String text) throws Exception {
-    zip.putNextEntry(new ZipEntry(name));
-    zip.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-    zip.closeEntry();
   }
 
   public void dispose() {
@@ -333,6 +355,10 @@ public final class FrozenCapture {
     if (original != null) {
       original.recycle();
       original = null;
+    }
+    if (layers != null) {
+      layers.close();
+      layers = null;
     }
     metadata = null;
     nodes = List.of();

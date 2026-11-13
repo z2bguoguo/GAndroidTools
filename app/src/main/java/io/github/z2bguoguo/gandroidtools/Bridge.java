@@ -178,7 +178,9 @@ public final class Bridge {
     }
     if (action.equals("freeze") && !response.optBoolean("treeAvailable") && access != null) {
       try {
-        JSONObject tree = access.control("tree", new JSONObject());
+        JSONObject tree =
+            access.control(
+                "tree", new JSONObject().put("allWindows", data.optBoolean("allWindows", false)));
         response
             .put("nodes", tree.getJSONArray("nodes"))
             .put("treeAvailable", true)

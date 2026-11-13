@@ -109,6 +109,7 @@ final class ControlTree {
             .put("key", token)
             .put("path", key)
             .put("depth", depth)
+            .put("windowId", n.getWindowId())
             .put("text", secret ? "" : bounded(n.getText()))
             .put("description", secret ? "" : bounded(n.getContentDescription()))
             .put("id", n.getViewIdResourceName())

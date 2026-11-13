@@ -17,6 +17,82 @@ public final class SettingsHelp {
 
   static {
     add(
+        "windowLayers",
+        "每次逻辑截图最多读取多少个可访问窗口的图层信息。Android 14"
+            + " 及以上、控件兼容服务已连接时，尝试保留独立窗口图像；安全窗口、无效窗口或预算外窗口会明确标记为未取得图像。例：12 表示最多 12 个窗口，不会虚构不可见图层。",
+        "Maximum accessible window records per logical snapshot. On Android 14+ with the enabled"
+            + " accessibility bridge, independent window buffers are requested. Protected, invalid"
+            + " or over-budget windows are marked unavailable. Example: 12 records at most;"
+            + " unavailable layers are never invented.");
+    add(
+        "controlLayers",
+        "保存图层包时，将冻结控件区域裁成透明 PNG"
+            + " 片段，并保留完整控件树。优先保存较小、不同范围的控件，数量与像素预算同时生效。它们标记为合成图片段，不代表按钮背后的独立图像。例：192 最多导出 192 片。",
+        "Export frozen control crops as PNG fragments while retaining the full bounded tree."
+            + " Smaller distinct bounds are prioritized under both count and pixel budgets. These"
+            + " are labeled composite fragments, never independent images behind a button. Example:"
+            + " 192 exports at most 192 crops.");
+    add(
+        "layerMemoryMb",
+        "限制保留的窗口图像像素内存，以及控件片段累计像素量；不包含主截图本身。例：32 MiB 约为 800 万个 RGBA 像素。数量较多或高分辨率时跳过超额图层，保留元数据和原因。",
+        "Bounds retained window pixel memory and cumulative exported fragment pixels, excluding the"
+            + " primary screenshot. Example: 32 MiB holds about 8 million RGBA pixels. Excess"
+            + " layers retain metadata and an explicit skip reason.");
+    add(
+        "historyFrames",
+        "长截图补全固定浮窗位置时最多参考的其他对齐帧数。可以使用前后已采集帧；只复制同一页面坐标中真实出现、且未被遮挡或忽略的像素。没有观察到的区域保留透明，不用 AI 编造。例：4"
+            + " 最多参考 4 帧。",
+        "Maximum other aligned frames consulted to fill fixed-overlay holes. Earlier and later"
+            + " captured frames can supply real pixels at the same document coordinate only when"
+            + " unobscured and unmasked. Unobserved regions stay transparent; no AI fill. Example:"
+            + " 4 consults up to four frames.");
+    add(
+        "captureDiskMb",
+        "限制本次采集的私有缓存图像与元数据总量。达到上限暂停采集，已有画面仍可导出。例：512 是 512 MiB；长图历史包会另占导出空间。",
+        "Bounds private image and metadata cache for this capture. At the limit capture pauses and"
+            + " existing frames can still be exported. Example: 512 means 512 MiB; the exported"
+            + " history archive uses additional storage.");
+    add(
+        "layerPack",
+        "保存普通截图时同时生成 .gatpage 图层包，可用 ZIP"
+            + " 工具解压，包含编辑后的截图、控件树、可获取窗口图像和控件片段。隐藏控件在各对应图层中也会遮罩，不保存未遮罩的原图。图像与窗口回调不是原子同一帧，各自保留时间信息。",
+        "Saving a normal screenshot also creates a ZIP-readable .gatpage with the edited composite,"
+            + " tree, available window buffers and control fragments. Hidden controls are masked in"
+            + " corresponding layers too. Capture callbacks are not atomic; timing information is"
+            + " retained.");
+    add(
+        "windowLayerPixels",
+        "尝试保留独立窗口像素，需要 Android 14+ 和已启用的控件兼容通道。不会突破安全窗口保护。普通按钮通常没有独立 Surface，只保留其元数据与合成图片段。",
+        "Request independent window pixels on Android 14+ with the enabled accessibility bridge."
+            + " Secure windows remain protected. Normal buttons usually have no independent"
+            + " Surface, so only their metadata and composite crops are available.");
+    add(
+        "autoFixed",
+        "通过帧间静止区域、滚动位移与控件几何识别固定部分。顶栏只放在最上方，底栏只放在末尾；中间固定浮窗尝试历史补全。匹配不可靠时分图，避免凭空丢失正文。可关闭并使用手动裁边或忽略控件。",
+        "Use stationary pixels, measured scrolling and control geometry to identify fixed parts."
+            + " The header appears once at the start, footer once at the end, and interior fixed"
+            + " overlays use history repair. Unreliable alignment starts a separate image. Disable"
+            + " to use manual crops or control masks.");
+    add(
+        "historyRepair",
+        "需同时启用自动固定区域识别，避免把固定栏当成正文。对固定浮窗或手动忽略区域，尝试从已可靠对齐的其他帧补回真实正文。不能补回所有帧都被挡住的像素；这种情况导出透明区域，并在报告记录未补全部分。",
+        "Fill fixed-overlay or excluded holes using real content from other reliably aligned"
+            + " frames. Pixels hidden in every frame cannot be recovered; they stay transparent and"
+            + " are counted in the report.");
+    add(
+        "layerClean",
+        "长截图先尝试使用独立的主应用窗口图像，避开其他窗口的浮层。仅在图像坐标和尺寸能可靠对应时使用；网页内部 position:fixed 元素通常仍在同一个窗口，需要历史补全。",
+        "Prefer a genuine main-application window buffer when its coordinates and dimensions match,"
+            + " avoiding separate overlay windows. CSS position:fixed elements usually share the"
+            + " same window and still need history repair.");
+    add(
+        "longArchive",
+        "导出长图时附带 .gatlong 历史包，包含已遮罩的采集帧、控件和窗口元数据、对齐位移、固定区域及补全统计。不是未编辑原图备份，不额外保留未遮罩窗口图像。可用 ZIP"
+            + " 工具打开。",
+        "Export a ZIP-readable .gatlong alongside the long image, containing masked frames,"
+            + " control/window metadata, alignment offsets, fixed regions and repair statistics. It"
+            + " is not a backup of unedited originals or unmasked window buffers.");
+    add(
         "updateHours",
         "打开应用时，距离上次成功检查超过此时长才再次检查。例：24 表示一天一次。手动检查不受间隔限制，下载与安装仍由你确认。",
         "On launch, check only after this many hours since a successful check. Example: 24 checks"

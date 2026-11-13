@@ -12,7 +12,7 @@ public final class TreeNode {
   public final String path, key, text, description, id, className, packageName;
   public final Rect bounds;
   public final boolean editable, clickable, scrollable, password, enabled;
-  public final int depth;
+  public final int depth, windowId;
 
   public TreeNode(JSONObject o) {
     key = o.optString("key");
@@ -23,6 +23,7 @@ public final class TreeNode {
     className = o.optString("class");
     packageName = o.optString("package");
     depth = o.optInt("depth");
+    windowId = o.optInt("windowId", -1);
     JSONArray r = o.optJSONArray("bounds");
     bounds = r == null ? new Rect() : new Rect(r.optInt(0), r.optInt(1), r.optInt(2), r.optInt(3));
     editable = o.optBoolean("editable");
