@@ -125,6 +125,88 @@ public class LongComposerTest {
     }
   }
 
+  @Test
+  public void changingFooterHeightKeepsEveryObservedDocumentRowOnce() throws Exception {
+    ToolApp app =
+        (ToolApp)
+            InstrumentationRegistry.getInstrumentation().getTargetContext().getApplicationContext();
+    app.config.set("autoFixed", true);
+    app.config.set("historyRepair", true);
+    app.config.set("longArchive", false);
+    app.config.set("jpeg", false);
+    int w = 96, h = 180, top = 22, shift = 63;
+    int[] footers = {18, 42, 42};
+    int[] document = new int[w * h * 4];
+    Random random = new Random(2801);
+    for (int i = 0; i < document.length; i++) document[i] = 0xff000000 | random.nextInt(0xffffff);
+    File cache = new File(app.getCacheDir(), "changing-footer-" + System.nanoTime());
+    assertTrue(cache.mkdirs());
+    List<File> frames = new ArrayList<>();
+    LongComposer.Result result = null;
+    try {
+      for (int index = 0; index < 3; index++) {
+        int bottom = footers[index];
+        int[] pixels = new int[w * h];
+        for (int y = 0; y < h; y++)
+          for (int x = 0; x < w; x++)
+            pixels[y * w + x] =
+                y < top
+                    ? 0xff245c49
+                    : y >= h - bottom ? 0xff154b69 : document[(y - top + index * shift) * w + x];
+        File frame = new File(cache, "frame-" + index + ".png");
+        frames.add(frame);
+        Bitmap bitmap = Bitmap.createBitmap(pixels, w, h, Bitmap.Config.ARGB_8888);
+        try (FileOutputStream out = new FileOutputStream(frame)) {
+          bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } finally {
+          bitmap.recycle();
+        }
+        JSONArray nodes =
+            new JSONArray()
+                .put(
+                    new JSONObject()
+                        .put("id", "page/scroll")
+                        .put("class", "android.widget.ScrollView")
+                        .put("scrollable", true)
+                        .put("bounds", new JSONArray(new int[] {0, top, w, h - bottom})));
+        try (FileWriter writer = new FileWriter(new File(cache, frame.getName() + ".json"))) {
+          writer.write(
+              new JSONObject()
+                  .put("nodes", nodes)
+                  .put("region", new JSONArray(new int[] {0, 0, w, h}))
+                  .toString());
+        }
+      }
+      result = new LongComposer(app.config, () -> false, false).compose(frames);
+      assertEquals(1, result.images().size());
+      Bitmap output = BitmapFactory.decodeFile(result.images().get(0).toString());
+      assertNotNull(output);
+      try {
+        assertEquals(h + shift * 2, output.getHeight());
+        for (int y = 0; y < output.getHeight(); y++)
+          for (int x = 0; x < w; x++) {
+            int expected =
+                y < top
+                    ? 0xff245c49
+                    : y >= output.getHeight() - footers[2]
+                        ? 0xff154b69
+                        : document[(y - top) * w + x];
+            assertEquals("Changing footer at " + x + "," + y, expected, output.getPixel(x, y));
+          }
+      } finally {
+        output.recycle();
+      }
+    } finally {
+      if (result != null) {
+        for (File file : result.images()) file.delete();
+        if (result.history() != null) result.history().delete();
+      }
+      File[] files = cache.listFiles();
+      if (files != null) for (File file : files) file.delete();
+      cache.delete();
+    }
+  }
+
   private byte[] read(ZipFile zip, String path) throws Exception {
     try (java.io.InputStream in = zip.getInputStream(zip.getEntry(path));
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {

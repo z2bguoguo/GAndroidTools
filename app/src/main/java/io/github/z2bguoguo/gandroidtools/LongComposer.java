@@ -122,6 +122,8 @@ final class LongComposer {
       canvas = new Canvas(sheet);
       try (ZipOutputStream zip =
           partial == null ? null : new ZipOutputStream(new FileOutputStream(partial))) {
+        long documentEnd = 0;
+        int currentGroup = -1;
         for (int i = 0; i < plans.size(); i++) {
           check();
           Plan plan = plans.get(i);
@@ -130,12 +132,17 @@ final class LongComposer {
           repair(i, pixels);
           Bitmap processed = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
           try {
-            if (!plan.duplicate) {
-              int source =
-                  i == 0 || plans.get(i - 1).group != plan.group
-                      ? 0
-                      : height - plan.footer - plan.shift;
-              append(processed, source, height - plan.footer);
+            if (plan.group != currentGroup) {
+              append(processed, 0, height - plan.footer);
+              documentEnd = plan.origin + height - plan.footer;
+              currentGroup = plan.group;
+            } else if (!plan.duplicate) {
+              long start = documentEnd - plan.origin;
+              if (start < plan.header)
+                throw new IllegalStateException("Unobserved gap in capture plan");
+              if (start < height - plan.footer)
+                append(processed, (int) start, height - plan.footer);
+              documentEnd = Math.max(documentEnd, plan.origin + height - plan.footer);
             }
             boolean last = i == plans.size() - 1 || plans.get(i + 1).group != plan.group;
             if (last) {
@@ -237,12 +244,8 @@ final class LongComposer {
           } else {
             plan.shift = motion.shift();
             plan.origin = old.origin + motion.shift();
-            plan.header = old.header == 0 ? motion.top() : Math.min(old.header, motion.top());
-            plan.footer = old.footer == 0 ? motion.bottom() : Math.min(old.footer, motion.bottom());
-            if (i == 1 || plans.get(i - 2).group != group) {
-              old.header = motion.top();
-              old.footer = motion.bottom();
-            }
+            fixedMargins(old, motion);
+            fixedMargins(plan, motion);
             for (ScrollAnalysis.Box box : motion.fixed()) {
               add(old.masks, box);
               add(plan.masks, box);
@@ -252,32 +255,60 @@ final class LongComposer {
       }
       previous = next;
     }
-    for (int start = 0; start < plans.size(); ) {
-      int end = start + 1, top = Integer.MAX_VALUE, bottom = Integer.MAX_VALUE;
-      while (end < plans.size() && plans.get(end).group == plans.get(start).group) end++;
-      for (int i = start; i < end; i++)
-        if (plans.get(i).shift > 0) {
-          top = Math.min(top, plans.get(i).header);
-          bottom = Math.min(bottom, plans.get(i).footer);
-        }
-      if (top == Integer.MAX_VALUE) top = bottom = 0;
-      for (int i = start; i < end; i++) {
-        plans.get(i).header = top;
-        plans.get(i).footer = bottom;
-        final int t = top, b = bottom;
-        Plan plan = plans.get(i);
-        plan.masks.removeIf(
-            box -> !plan.manualMasks.contains(box) && (box.top() < t || box.bottom() > height - b));
+    for (int i = 0; i < plans.size(); i++)
+      for (int j = i + 1; j < plans.size(); j++) {
+        Plan first = plans.get(i), second = plans.get(j);
+        if (first.group != second.group || first.origin != second.origin) continue;
+        int top = Math.max(first.header, second.header),
+            bottom = Math.max(first.footer, second.footer);
+        first.header = second.header = top;
+        first.footer = second.footer = bottom;
+        for (ScrollAnalysis.Box box : new ArrayList<>(first.masks)) add(second.masks, box);
+        for (ScrollAnalysis.Box box : new ArrayList<>(second.masks)) add(first.masks, box);
       }
-      for (int i = start; i < end; i++)
-        for (int j = i + 1; j < end; j++)
-          if (plans.get(i).origin == plans.get(j).origin) {
-            for (ScrollAnalysis.Box box : new ArrayList<>(plans.get(i).masks))
-              add(plans.get(j).masks, box);
-            for (ScrollAnalysis.Box box : new ArrayList<>(plans.get(j).masks))
-              add(plans.get(i).masks, box);
-          }
-      start = end;
+    long cursor = -1, base = 0;
+    int previousGroup = -1, outputGroup = -1;
+    for (Plan plan : plans) {
+      plan.masks.removeIf(
+          box ->
+              !plan.manualMasks.contains(box)
+                  && (box.top() < plan.header || box.bottom() > height - plan.footer));
+      int originalGroup = plan.group;
+      long originalOrigin = plan.origin;
+      boolean begin = originalGroup != previousGroup;
+      if (!begin && originalOrigin + plan.header > cursor) {
+        begin = true;
+        ToolApp.app.log.add(
+            "WARN",
+            "capture.alignment",
+            "A fixed-region change left an unobserved gap; starting a separate image group");
+      }
+      if (begin) {
+        outputGroup++;
+        base = originalOrigin;
+        cursor = originalOrigin + height - plan.footer;
+        plan.duplicate = false;
+      } else cursor = Math.max(cursor, originalOrigin + height - plan.footer);
+      plan.group = outputGroup;
+      plan.origin = originalOrigin - base;
+      previousGroup = originalGroup;
+    }
+  }
+
+  private void fixedMargins(Plan plan, ScrollAnalysis.Motion motion) {
+    if (!config.flag("autoFixed", true)) return;
+    plan.header = Math.max(plan.header, motion.top());
+    plan.footer = Math.max(plan.footer, motion.bottom());
+    for (ScrollAnalysis.Anchor anchor : plan.anchors) {
+      ScrollAnalysis.Box box = anchor.bounds();
+      if (!anchor.identity().startsWith("scroll-viewport:")
+          || box.width() < width * 3 / 4
+          || box.height() < height * 2 / 5) continue;
+      // A viewport's own bounds describe this frame, even when browser chrome changes size.
+      if (box.top() >= 0 && box.top() < height / 3) plan.header = box.top();
+      if (box.bottom() <= height && box.bottom() > height * 2 / 3)
+        plan.footer = height - box.bottom();
+      break;
     }
   }
 
