@@ -156,6 +156,17 @@ public final class Config {
               "拼接通过像素匹配寻找重叠。",
               "Stitching finds overlap with pixel matching."),
           new Option(
+              "maxSwipes",
+              "每轮自动下滑次数上限",
+              "Automatic swipes per run",
+              1,
+              199,
+              39,
+              "例如 5 次：先截当前画面，再最多下滑 5 次，每次下滑后截图。继续采集会开始新一轮，仍受总帧数限制。",
+              "For example, 5 captures the current view, then performs up to five swipes with a"
+                  + " capture after each. Resuming starts a new run, subject to the total frame"
+                  + " limit."),
+          new Option(
               "maxFrames",
               "最大截图帧数",
               "Maximum capture frames",

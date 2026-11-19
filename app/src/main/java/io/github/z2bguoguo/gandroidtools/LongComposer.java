@@ -315,7 +315,10 @@ final class LongComposer {
   private void repair(int index, int[] pixels) throws Exception {
     Plan target = plans.get(index);
     BitSet holes = mask(target.masks, target.header, height - target.footer);
-    for (int at = holes.nextSetBit(0); at >= 0; at = holes.nextSetBit(at + 1)) pixels[at] = 0;
+    BitSet manual = mask(target.manualMasks, 0, height);
+    // Large inferred masks usually describe repeated page content rather than floating controls.
+    if (holes.cardinality() > (long) width * height / 10) holes.and(manual);
+    holes.or(manual);
     if (config.flag("historyRepair", true) && config.flag("autoFixed", true) && !holes.isEmpty()) {
       int used = 0;
       for (int distance = 1;
@@ -348,6 +351,10 @@ final class LongComposer {
       }
     }
     unknown += holes.cardinality();
+    // Keep the original pixels wherever an inferred mask has no observed replacement.
+    // Explicit exclusions still remain transparent if history cannot supply pixels.
+    holes.and(manual);
+    for (int at = holes.nextSetBit(0); at >= 0; at = holes.nextSetBit(at + 1)) pixels[at] = 0;
     if (!holes.isEmpty()) transparent = true;
   }
 

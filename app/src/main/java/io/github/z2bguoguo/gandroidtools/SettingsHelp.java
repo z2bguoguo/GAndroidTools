@@ -180,6 +180,12 @@ public final class SettingsHelp {
             + "Example: 25% is a useful starting point; try 40% for repetitive or complex pages."
             + " Unreliable overlaps start another image.");
     add(
+        "maxSwipes",
+        "限制每轮自动采集发送的下滑手势。设为 5 时，先截当前画面，再最多下滑 5 次。继续采集会开始新一轮；总帧数、磁盘上限和触底检测仍可提前停止。",
+        "Limits swipes per automatic capture run. With 5, capture starts at the current view and"
+            + " swipes up to five times. Resuming starts a new run. Frame, disk and end-of-page"
+            + " limits still apply.");
+    add(
         "maxFrames",
         "限制一个长截图会话采集的帧数。帧逐张写入缓存，达到上限会暂停；导出或取消后清理会话缓存。\n\n"
             + "例：40 帧适合一般文章；提高到 100 帧会增加耗时和磁盘占用。已导出的文件不会被此选项删除。",

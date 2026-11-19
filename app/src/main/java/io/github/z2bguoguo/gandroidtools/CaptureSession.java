@@ -97,6 +97,8 @@ public final class CaptureSession {
           try {
             int[] previous = null;
             int repeated = 0;
+            int swipes = 0;
+            int maxSwipes = app.config.number("maxSwipes");
             while (active() && !cancelled && frames.size() < app.config.number("maxFrames")) {
               int[] now = capture();
               if (previous != null && OverlapMatcher.same(previous, now)) repeated++;
@@ -104,8 +106,11 @@ public final class CaptureSession {
               if (repeated >= 2) break;
               previous = now;
               String mode = app.config.text("captureMode", "page");
-              if (mode.equals("manual")) break;
+              if (mode.equals("manual")
+                  || swipes >= maxSwipes
+                  || frames.size() >= app.config.number("maxFrames")) break;
               scroll(mode);
+              swipes++;
               pause(app.config.number("settle"));
             }
             app.log.add(

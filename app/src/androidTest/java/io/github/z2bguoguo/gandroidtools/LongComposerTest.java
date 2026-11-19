@@ -92,11 +92,15 @@ public class LongComposerTest {
             int color = output.getPixel(x, y);
             if (y < top) assertEquals(0xff245c49, color);
             else if (y >= output.getHeight() - bottom) assertEquals(0xff154b69, color);
-            else if (Color.alpha(color) != 0)
+            else if (!(x >= 66
+                && x < 90
+                && y >= 115 + shift * 2
+                && y < 141 + shift * 2
+                && (color == 0xffff00ff || color == Color.WHITE)))
               assertEquals(
                   "Document pixel changed at " + x + "," + y, document[(y - top) * w + x], color);
           }
-        assertEquals(0, Color.alpha(output.getPixel(70, 125 + shift * 2)));
+        assertEquals(0xffff00ff, output.getPixel(70, 125 + shift * 2));
       } finally {
         output.recycle();
       }

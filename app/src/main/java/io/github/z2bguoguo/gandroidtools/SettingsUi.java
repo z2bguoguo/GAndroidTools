@@ -252,6 +252,7 @@ public final class SettingsUi {
                 "settle",
                 "duration",
                 "overlap",
+                "maxSwipes",
                 "maxFrames",
                 "maxHeight",
                 "topCrop",
