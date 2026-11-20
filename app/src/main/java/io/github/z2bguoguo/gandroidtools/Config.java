@@ -159,9 +159,9 @@ public final class Config {
               "overlap",
               "跳屏保留重叠（%）",
               "Page jump overlap (%)",
-              10,
+              45,
               70,
-              25,
+              45,
               "拼接通过像素匹配寻找重叠。",
               "Stitching finds overlap with pixel matching."),
           new Option(

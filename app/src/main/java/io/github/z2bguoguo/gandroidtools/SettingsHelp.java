@@ -179,11 +179,11 @@ public final class SettingsHelp {
     add(
         "overlap",
         "跳屏手势后预留的画面重叠比例，为拼接寻找相同内容。值越大，每次前进越少、帧数更多。控件滚动模式实际距离由目标应用决定。\n\n"
-            + "例：25% 通常足够；内容重复或排版复杂时可用 40%。找不到可靠重叠时会另存一张图。",
+            + "例：一般页面用 45%；内容重复或排版复杂时可用 60%。无法可靠拼接时会提示重新采集。",
         "Overlap retained by the page-jump gesture. Higher values advance less and require more"
             + " frames. Accessible scroll actions use the distance chosen by the target app.\n\n"
-            + "Example: 25% is a useful starting point; try 40% for repetitive or complex pages."
-            + " Unreliable overlaps start another image.");
+            + "Example: Start at 45%; try 60% for repetitive or complex pages."
+            + " Unreliable overlaps prompt a retry.");
     add(
         "maxSwipes",
         "限制每轮自动采集发送的下滑手势。例：设为 5 时，先截当前画面，再最多下滑 5 次。继续采集会开始新一轮；总帧数、磁盘上限和触底检测仍可提前停止。",

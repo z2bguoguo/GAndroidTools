@@ -6,7 +6,7 @@ Settings are grouped into language/appearance, floating gestures, capture/galler
 
 The editor and live menu share five semicircle slots from top to bottom. The center edits double tap. Duplicate actions and unassigned slots are supported. Apply floating layout updates button size and opacity immediately.
 
-Long capture enables gallery auto-save by default, publishing each split image under `Pictures/GAndroidTools`. Android 10+ uses MediaStore without gallery read access; Android 8/9 requires storage write permission when enabled. Disabling auto-save retains only internal exports. Gallery failures also retain internal files and report how many images were saved. The gallery and internal copies are managed separately: deleting one does not remove the other.
+Long capture enables gallery auto-save by default, publishing the stitched image under `Pictures/GAndroidTools`. Android 10+ uses MediaStore without gallery read access; Android 8/9 requires storage write permission when enabled. Disabling auto-save retains only internal exports. Gallery failures also retain internal files and report how many images were saved. The gallery and internal copies are managed separately: deleting one does not remove the other.
 
 ## Super background
 
@@ -30,7 +30,7 @@ Start a session, then use **＋** for a manual frame, **▶** for automatic fram
 - Capture controls define the union of checked control bounds. No selection means the full screen.
 - Ignored control bounds become transparent on every captured frame.
 - Use top and bottom cropping to remove fixed headers and footers. An empty region is rejected.
-- Frames are spooled to the app cache. Export uses sampled pixel overlap matching. Unreliable matches start a separate image rather than guessing a seam. Configure the height limit, frame count, PNG/JPEG format and JPEG quality.
+- Frames are spooled to the app cache. Export uses sampled pixel overlap matching. Export produces one stitched image and reports an error when frames cannot be aligned. Configure the height limit, frame count, PNG/JPEG format and JPEG quality.
 
 ## Super find
 
@@ -62,6 +62,6 @@ Home → Check for updates performs a manual check. Settings → Language and ap
 
 A normal Save image also writes a `.gatpage` by default. It retains the frozen composite, bounded control tree, available independent window buffers, and small control crops under pixel/count limits. Window buffers require Android 14+ and the enabled accessibility control bridge; secure or unavailable windows are marked, not bypassed. Composite crops are explicitly labeled and cannot reveal content hidden inside the same window. Callbacks are sequential/asynchronous, not one atomic compositor frame; the pack records capture timing.
 
-Long capture can prefer an aligned application-window buffer to avoid separate overlay windows. Scrolling then measures body motion while ignoring fixed edges. Each confidently aligned group keeps the header once at its beginning and the footer once at its end. Stationary controls inside the body are masked and, when possible, filled using actual unmasked pixels from other frames at the same document coordinate. Inferred overlays retain their original pixels where no reliable replacement exists. The long-capture settings also limit automatic swipes per run. Ambiguous motion starts another image group rather than removing guessed rows. Manual top/bottom crops and ignored controls remain available.
+Long capture can prefer an aligned application-window buffer to avoid separate overlay windows. Scrolling then measures body motion while ignoring fixed edges. Each confidently aligned group keeps the header once at its beginning and the footer once at its end. Stationary controls inside the body are masked and, when possible, filled using actual unmasked pixels from other frames at the same document coordinate. Inferred overlays retain their original pixels where no reliable replacement exists. The long-capture settings also limit automatic swipes per run. Ambiguous motion stops export with a retry message. Manual top/bottom crops and ignored controls remain available.
 
 The optional `.gatlong` archive retains processed frames, sanitized control/window metadata, measured offsets, fixed bounds and repair counts. It contains neither unmasked original frames nor separate raw window buffers. History uses a bounded number of donor frames; capture also has a configurable disk limit. Advanced options are in Settings → Capture and gallery.

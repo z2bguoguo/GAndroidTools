@@ -152,7 +152,7 @@ public final class CaptureSession {
     int distance =
         mode.equals("smooth")
             ? area.height() * 2 / 5
-            : area.height() * (100 - app.config.number("overlap")) / 100;
+            : area.height() * (100 - Math.max(45, app.config.number("overlap"))) / 100;
     int end = Math.max(area.top + margin, start - distance);
     app.bridge.call(
         "swipe",

@@ -115,10 +115,22 @@ final class LongComposer {
     boolean success = false;
     try {
       analyze(frames);
-      int capacity =
-          Math.min(
-              config.number("maxHeight"), Math.max(height, (int) (48L * 1024 * 1024 / 4 / width)));
-      sheet = Bitmap.createBitmap(width, capacity, Bitmap.Config.ARGB_8888);
+      Plan last = plans.get(plans.size() - 1);
+      if (last.group != 0 || last.origin == 0)
+        throw new IllegalStateException(
+            ToolApp.t(
+                "没有可靠的连续滚动重叠，无法拼成长图。请用慢滑模式重新采集。",
+                "No reliable continuous scroll overlap. Retry in slow mode."));
+      long rows = 0;
+      for (Plan plan : plans) rows = Math.max(rows, plan.origin + height - plan.footer);
+      rows += last.footer;
+      long maxRows = Math.min(config.number("maxHeight"), 48L * 1024 * 1024 / 4 / width);
+      if (rows > maxRows)
+        throw new IllegalStateException(
+            ToolApp.t(
+                "长图超过单张导出上限。请减少下滑次数，或缩小截图宽度。",
+                "The image exceeds the single-image limit. Reduce swipes or capture width."));
+      sheet = Bitmap.createBitmap(width, (int) rows, Bitmap.Config.ARGB_8888);
       canvas = new Canvas(sheet);
       try (ZipOutputStream zip =
           partial == null ? null : new ZipOutputStream(new FileOutputStream(partial))) {
@@ -373,6 +385,7 @@ final class LongComposer {
     for (int y = Math.max(0, from); y < to; ) {
       check();
       int count = Math.min(to - y, sheet.getHeight() - filled);
+      if (count == 0) throw new IllegalStateException("Long capture exceeded its planned height");
       canvas.drawBitmap(
           frame,
           new Rect(0, y, width, y + count),
@@ -380,7 +393,6 @@ final class LongComposer {
           replace);
       y += count;
       filled += count;
-      if (filled == sheet.getHeight()) flush();
     }
   }
 
