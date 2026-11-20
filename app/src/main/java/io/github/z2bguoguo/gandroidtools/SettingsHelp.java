@@ -140,6 +140,11 @@ public final class SettingsHelp {
             + " resets the timer; docking closes the menu. Zero disables automatic docking.\n\n"
             + "Example: use 5 seconds normally, or 0 during repeated actions and dock manually.");
     add(
+        "dockDepth",
+        "同时影响自动收边和手动收边。例：设为 60%，屏幕内保留 40% 的球宽作为触摸入口。",
+        "Applies to automatic and manual docking. Example: 60% leaves 40% of the button width"
+            + " visible and touchable.");
+    add(
         "ballSize",
         "控制常驻悬浮球的直径，单位为 dp。更大的球更容易触摸，但遮挡面积更大。更改后点击“应用悬浮布局”。\n\n"
             + "例：52 dp 为默认值，小屏可选 44 dp，手指不易点准时可选 64 dp。功能球会在可用屏幕范围内排列。",

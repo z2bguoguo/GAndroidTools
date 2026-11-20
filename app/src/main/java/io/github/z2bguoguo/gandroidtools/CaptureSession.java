@@ -23,6 +23,8 @@ public final class CaptureSession {
   private final OverlayService overlay;
   private final ExecutorService serial = Executors.newSingleThreadExecutor();
   private final AtomicBoolean active = new AtomicBoolean();
+  private final AtomicBoolean exporting = new AtomicBoolean();
+  private List<TreeNode> latestNodes = List.of();
   private final AtomicBoolean autoRunning = new AtomicBoolean();
   private volatile boolean cancelled;
   private final List<File> frames = new ArrayList<>();
@@ -55,7 +57,7 @@ public final class CaptureSession {
   }
 
   public void start() {
-    if (active.get()) return;
+    if (exporting.get() || active.get()) return;
     cancelled = false;
     active.set(true);
     serial.execute(
@@ -78,6 +80,7 @@ public final class CaptureSession {
   }
 
   public void frame() {
+    if (exporting.get()) return;
     if (!active()) start();
     serial.execute(
         () -> {
@@ -90,6 +93,7 @@ public final class CaptureSession {
   }
 
   public void automatic() {
+    if (exporting.get()) return;
     if (!active()) start();
     if (!autoRunning.compareAndSet(false, true)) return;
     serial.execute(
@@ -101,9 +105,12 @@ public final class CaptureSession {
             int maxSwipes = app.config.number("maxSwipes");
             while (active() && !cancelled && frames.size() < app.config.number("maxFrames")) {
               int[] now = capture();
-              if (previous != null && OverlapMatcher.same(previous, now)) repeated++;
+              if (previous != null && OverlapMatcher.sameViewport(previous, now)) repeated++;
               else repeated = 0;
-              if (repeated >= 2) break;
+              if (repeated >= 2) {
+                app.log.add("INFO", "capture.scroll", "Viewport stopped moving after two swipes");
+                break;
+              }
               previous = now;
               String mode = app.config.text("captureMode", "page");
               if (mode.equals("manual")
@@ -125,21 +132,13 @@ public final class CaptureSession {
   }
 
   public void pause() {
+    if (exporting.get()) return;
     cancelled = true;
     serial.execute(() -> cancelled = false);
   }
 
   private void scroll(String mode) throws Exception {
-    List<TreeNode> nodes = List.of();
-    if (mode.equals("page"))
-      try {
-        nodes = TreeNode.parse(app.bridge.call("tree"));
-      } catch (Exception error) {
-        app.log.add(
-            "WARN",
-            "capture.scroll",
-            "Control scroll unavailable; using a screen gesture: " + ErrorDetails.message(error));
-      }
+    List<TreeNode> nodes = latestNodes;
     android.util.DisplayMetrics dm = app.getResources().getDisplayMetrics();
     Rect area = new Rect(0, 0, dm.widthPixels, dm.heightPixels);
     long best = 0;
@@ -213,6 +212,7 @@ public final class CaptureSession {
       if (firstTree == null) firstTree = tree;
       app.log.add("DEBUG", "capture.backend", tree.optString("captureBackend"));
       List<TreeNode> nodes = TreeNode.parse(tree);
+      latestNodes = nodes;
       Rect region = new Rect(0, 0, raw.getWidth(), raw.getHeight());
       synchronized (this) {
         if (!include.isEmpty()) {
@@ -270,8 +270,13 @@ public final class CaptureSession {
       }
       cacheBytes += amount;
       frames.add(frame);
-      int[] pixels = new int[bitmap.getWidth() * bitmap.getHeight()];
-      bitmap.getPixels(pixels, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
+      int[] pixels = new int[OverlapMatcher.VIEWPORT_GRID * OverlapMatcher.VIEWPORT_GRID];
+      int grid = OverlapMatcher.VIEWPORT_GRID;
+      for (int y = 0; y < grid; y++)
+        for (int x = 0; x < grid; x++)
+          pixels[y * grid + x] =
+              raw.getPixel(
+                  region.left + x * region.width() / grid, region.top + y * region.height() / grid);
       app.log.add(
           "INFO",
           "capture",
@@ -300,6 +305,7 @@ public final class CaptureSession {
   }
 
   public void finish() {
+    if (!active() || !exporting.compareAndSet(false, true)) return;
     cancelled = true;
     serial.execute(
         () -> {
@@ -336,6 +342,7 @@ public final class CaptureSession {
           } finally {
             active.set(false);
             cleanup();
+            exporting.set(false);
           }
         });
   }

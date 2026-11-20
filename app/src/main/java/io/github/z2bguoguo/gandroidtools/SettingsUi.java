@@ -155,7 +155,14 @@ public final class SettingsUi {
       case "floating" -> {
         editor(root);
         options(
-            root, List.of("collapse", "ballSize", "opacity", "doubleTapWindow", "longPressDelay"));
+            root,
+            List.of(
+                "collapse",
+                "dockDepth",
+                "ballSize",
+                "opacity",
+                "doubleTapWindow",
+                "longPressDelay"));
         Ui.helpButton(
             Ui.card(root),
             ToolApp.t("应用悬浮布局", "Apply floating layout"),

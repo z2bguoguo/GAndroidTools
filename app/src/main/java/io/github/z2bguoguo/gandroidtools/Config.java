@@ -111,6 +111,15 @@ public final class Config {
               "0 关闭自动贴边；交互后重新计时。",
               "0 disables automatic docking; interaction resets the timer."),
           new Option(
+              "dockDepth",
+              "收边隐藏比例（%）",
+              "Docked hidden portion (%)",
+              0,
+              75,
+              55,
+              "收边时移出屏幕的球宽比例。",
+              "Percentage of the button width moved offscreen when docked."),
+          new Option(
               "ballSize",
               "悬浮球尺寸（dp）",
               "Floating button size (dp)",

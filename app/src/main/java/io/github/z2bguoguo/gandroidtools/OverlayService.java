@@ -263,7 +263,8 @@ public final class OverlayService extends Service {
     wm.updateViewLayout(bubble, bubbleParams);
     bubble
         .animate()
-        .translationX((left ? -1 : 1) * bubble.getWidth() * 0.55f)
+        .translationX(
+            (left ? -1 : 1) * bubble.getWidth() * (ToolApp.app.config.number("dockDepth") / 100f))
         .setDuration(220)
         .start();
   }

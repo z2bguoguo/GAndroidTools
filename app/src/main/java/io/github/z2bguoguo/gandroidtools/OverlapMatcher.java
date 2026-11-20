@@ -54,6 +54,27 @@ public final class OverlapMatcher {
     return count == 0 || max - min < 18 ? Double.MAX_VALUE : (double) sum / count;
   }
 
+  static final int VIEWPORT_GRID = 48;
+
+  /** Ignore a small amount of animation without treating broad page movement as stationary. */
+  static boolean sameViewport(int[] before, int[] after) {
+    int grid = VIEWPORT_GRID;
+    int stationary = 0;
+    for (int top = 0; top < grid; top += 8)
+      for (int left = 0; left < grid; left += 8) {
+        int changed = 0;
+        for (int y = top; y < top + 8; y++)
+          for (int x = left; x < left + 8; x++) {
+            int a = before[y * grid + x], b = after[y * grid + x];
+            if (Math.abs((a >> 16 & 255) - (b >> 16 & 255)) > 12
+                || Math.abs((a >> 8 & 255) - (b >> 8 & 255)) > 12
+                || Math.abs((a & 255) - (b & 255)) > 12) changed++;
+          }
+        if (changed <= 2) stationary++;
+      }
+    return stationary >= 34;
+  }
+
   public static boolean same(int[] a, int[] b) {
     if (a.length != b.length || a.length == 0) return false;
     long error = 0;

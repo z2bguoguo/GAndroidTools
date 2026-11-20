@@ -9,6 +9,17 @@ import org.junit.Test;
 
 public class OverlapMatcherTest {
   @Test
+  public void stationaryViewportToleratesLocalAnimationButDetectsScroll() {
+    int grid = OverlapMatcher.VIEWPORT_GRID;
+    int[] before = new int[grid * grid];
+    int[] after = before.clone();
+    for (int y = 8; y < 16; y++) for (int x = 8; x < 16; x++) after[y * grid + x] = 0x00ffffff;
+    assertTrue(OverlapMatcher.sameViewport(before, after));
+    for (int y = 16; y < 24; y++) for (int x = 0; x < grid; x++) after[y * grid + x] = 0x00ffffff;
+    assertFalse(OverlapMatcher.sameViewport(before, after));
+  }
+
+  @Test
   public void findsExactOverlap() {
     int w = 96, h = 180, overlap = 67;
     int[] all = random(w * (2 * h - overlap), 17);
