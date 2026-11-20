@@ -115,15 +115,15 @@ final class LongComposer {
     boolean success = false;
     try {
       analyze(frames);
-      Plan last = plans.get(plans.size() - 1);
-      if (last.group != 0 || last.origin == 0)
+      Plan finalFrame = plans.get(plans.size() - 1);
+      if (finalFrame.group != 0 || finalFrame.origin == 0)
         throw new IllegalStateException(
             ToolApp.t(
                 "没有可靠的连续滚动重叠，无法拼成长图。请用慢滑模式重新采集。",
                 "No reliable continuous scroll overlap. Retry in slow mode."));
       long rows = 0;
       for (Plan plan : plans) rows = Math.max(rows, plan.origin + height - plan.footer);
-      rows += last.footer;
+      rows += finalFrame.footer;
       long maxRows = Math.min(config.number("maxHeight"), 48L * 1024 * 1024 / 4 / width);
       if (rows > maxRows)
         throw new IllegalStateException(

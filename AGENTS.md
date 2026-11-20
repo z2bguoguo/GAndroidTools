@@ -45,3 +45,6 @@ CI runs gitleaks, actionlint and emulator smoke checks on API 26/35. A UI emulat
 ## Release
 
 Pushes to main publish prereleases after quality jobs. A manually requested stable release needs an explicit numeric semantic version. Persistent signing uses four ANDROID_* Actions secrets; use scripts/setup_signing.py from a trusted authenticated host. Wiki and public update metadata deploy together after the verified signed release when PAGES_ENABLED=true and Pages uses Actions. Do not change repository visibility automatically.
+
+Run local formatting, unit tests, lint, and builds before submitting Android changes.
+After pushing, follow the corresponding GitHub Actions run through successful completion, including device tests and publishing when applicable, before reporting completion.
